@@ -17,7 +17,14 @@ export interface Product {
   category: string;
   price: number;
   stock: number;
+  barcode?: string;
   created_at: string;
+}
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
+  subtotal: number;
 }
 
 export interface StockMovement {

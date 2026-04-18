@@ -8,11 +8,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, category, price, stock } = body;
+  const { name, category, price, stock, barcode } = body;
 
   const rows = await sql`
-    INSERT INTO products (name, category, price, stock)
-    VALUES (${name}, ${category}, ${price}, ${stock ?? 0})
+    INSERT INTO products (name, category, price, stock, barcode)
+    VALUES (${name}, ${category}, ${price}, ${stock ?? 0}, ${barcode ?? null})
     RETURNING *
   `;
   return NextResponse.json(rows[0], { status: 201 });

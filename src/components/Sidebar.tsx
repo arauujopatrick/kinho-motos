@@ -5,11 +5,12 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, ClipboardList, FileText,
   Calendar, Package, DollarSign, CreditCard,
-  BarChart2, History, Wrench
+  BarChart2, History, Wrench, ShoppingCart
 } from 'lucide-react';
 
 const links = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/pdv', label: 'PDV', icon: ShoppingCart },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/ordens-servico', label: 'Ordens de Serviço', icon: ClipboardList },
   { href: '/orcamentos', label: 'Orçamentos', icon: FileText },
