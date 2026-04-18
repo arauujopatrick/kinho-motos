@@ -6,6 +6,13 @@ import type { Customer } from '@/types';
 
 const empty = { name: '', phone: '', whatsapp: '', email: '', motorcycle: '', plate: '', address: '', observations: '' };
 
+function maskPhone(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits.length ? `(${digits}` : '';
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 export default function Clientes() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
@@ -120,8 +127,8 @@ export default function Clientes() {
             </div>
             <div className="p-5 grid grid-cols-2 gap-4">
               <Field label="Nome *" value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} span />
-              <Field label="Telefone *" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
-              <Field label="WhatsApp" value={form.whatsapp} onChange={v => setForm(f => ({ ...f, whatsapp: v }))} />
+              <Field label="Telefone *" value={form.phone} onChange={v => setForm(f => ({ ...f, phone: maskPhone(v) }))} placeholder="(00) 00000-0000" />
+              <Field label="WhatsApp" value={form.whatsapp} onChange={v => setForm(f => ({ ...f, whatsapp: maskPhone(v) }))} placeholder="(00) 00000-0000" />
               <Field label="E-mail" value={form.email} onChange={v => setForm(f => ({ ...f, email: v }))} />
               <Field label="Moto" value={form.motorcycle} onChange={v => setForm(f => ({ ...f, motorcycle: v }))} />
               <Field label="Placa" value={form.plate} onChange={v => setForm(f => ({ ...f, plate: v.toUpperCase() }))} />
@@ -142,11 +149,11 @@ export default function Clientes() {
   );
 }
 
-function Field({ label, value, onChange, span }: { label: string; value: string; onChange: (v: string) => void; span?: boolean }) {
+function Field({ label, value, onChange, span, placeholder }: { label: string; value: string; onChange: (v: string) => void; span?: boolean; placeholder?: string }) {
   return (
     <div className={span ? 'col-span-2' : ''}>
       <label className="block text-xs text-zinc-400 mb-1">{label}</label>
-      <input value={value} onChange={e => onChange(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500" />
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500" />
     </div>
   );
 }
