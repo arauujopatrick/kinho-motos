@@ -43,6 +43,7 @@ export interface ServiceItem {
 export interface ServiceOrder {
   id: string;
   customer_id?: string;
+  customer_name?: string;
   guest_name?: string;
   guest_phone?: string;
   customer_contact: string;
@@ -65,6 +66,7 @@ export type QuoteStatus = 'Pendente' | 'Aprovado' | 'Recusado';
 export interface Quote {
   id: string;
   customer_id?: string;
+  customer_name?: string;
   guest_name?: string;
   guest_phone?: string;
   motorcycle?: string;
@@ -93,6 +95,7 @@ export type AppointmentStatus = 'Agendado' | 'Confirmado' | 'Cancelado' | 'Concl
 export interface Appointment {
   id: string;
   customer_id?: string;
+  customer_name?: string;
   guest_name?: string;
   guest_phone?: string;
   motorcycle: string;
