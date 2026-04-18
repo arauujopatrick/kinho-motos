@@ -43,7 +43,9 @@ export default function OrdensServico() {
 
   function removeItem(id: string) { setForm(f => ({ ...f, items: f.items.filter(i => i.id !== id) })); }
 
-  const total = form.items.reduce((s, i) => s + i.price, 0);
+  const subtotal = form.items.reduce((s, i) => s + i.price, 0);
+  const cardFee = form.payment_method === 'Cartão' ? 3 : 0;
+  const total = subtotal + cardFee;
 
   async function save() {
     if (!form.promised_date) return;
@@ -150,7 +152,11 @@ export default function OrdensServico() {
             <div className="p-5 space-y-4">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Cliente cadastrado</label>
-                <select value={form.customer_id} onChange={e => setForm(f => ({ ...f, customer_id: e.target.value }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
+                <select value={form.customer_id} onChange={e => {
+                  const cid = e.target.value;
+                  const c = customers.find(x => x.id === cid);
+                  setForm(f => ({ ...f, customer_id: cid, motorcycle: c?.motorcycle || '', plate: c?.plate || '' }));
+                }} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
                   <option value="">— Selecionar (opcional) —</option>
                   {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -196,6 +202,18 @@ export default function OrdensServico() {
                         </div>
                       </li>
                     ))}
+                    {cardFee > 0 && (
+                      <li className="flex items-center justify-between text-sm pt-1">
+                        <span className="text-zinc-400">Subtotal</span>
+                        <span className="text-zinc-300">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                      </li>
+                    )}
+                    {cardFee > 0 && (
+                      <li className="flex items-center justify-between text-sm">
+                        <span className="text-yellow-400">Taxa Cartão</span>
+                        <span className="text-yellow-400">+ R$ 3,00</span>
+                      </li>
+                    )}
                     <li className="flex justify-end pt-1 text-sm font-semibold text-white">Total: R$ {total.toFixed(2).replace('.', ',')}</li>
                   </ul>
                 )}
