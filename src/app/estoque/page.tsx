@@ -10,46 +10,92 @@ export default function Estoque() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm] = useState({ name: '', category: '', price: '', stock: '', barcode: '' });
   const [movForm, setMovForm] = useState({ type: 'IN', quantity: '', reason: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => { fetch('/api/produtos').then(r => r.json()).then(setProducts); }, []);
 
   async function saveProduct() {
-    if (!form.name || !form.price) return;
-    const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
-    const res = await fetch('/api/produtos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const created = await res.json();
-    setProducts(prev => [created, ...prev]);
-    setModal(null);
-    setForm({ name: '', category: '', price: '', stock: '', barcode: '' });
+    if (!form.name.trim() || !form.price.trim()) {
+      setError('Preencha o nome e o preço do produto.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
+      const res = await fetch('/api/produtos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      setProducts(prev => [created, ...prev]);
+      setModal(null);
+      setForm({ name: '', category: '', price: '', stock: '', barcode: '' });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao salvar produto');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function saveEdit() {
-    if (!selectedProduct || !form.name || !form.price) return;
-    const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
-    const res = await fetch(`/api/produtos/${selectedProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const updated = await res.json();
-    setProducts(prev => prev.map(p => p.id === selectedProduct.id ? updated : p));
-    setModal(null);
+    if (!selectedProduct || !form.name.trim() || !form.price.trim()) {
+      setError('Preencha o nome e o preço do produto.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
+      const res = await fetch(`/api/produtos/${selectedProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      setProducts(prev => prev.map(p => p.id === selectedProduct.id ? updated : p));
+      setModal(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao editar produto');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function saveMovement() {
-    if (!selectedProduct || !movForm.quantity) return;
-    await fetch('/api/estoque', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product_id: selectedProduct.id, type: movForm.type, quantity: parseInt(movForm.quantity), reason: movForm.reason }) });
-    const qty = parseInt(movForm.quantity);
-    setProducts(prev => prev.map(p => p.id === selectedProduct.id ? { ...p, stock: movForm.type === 'IN' ? p.stock + qty : Math.max(0, p.stock - qty) } : p));
-    setModal(null);
-    setMovForm({ type: 'IN', quantity: '', reason: '' });
+    if (!selectedProduct || !movForm.quantity.trim()) {
+      setError('Informe a quantidade.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/estoque', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product_id: selectedProduct.id, type: movForm.type, quantity: parseInt(movForm.quantity), reason: movForm.reason }) });
+      if (!res.ok) throw new Error(await res.text());
+      const qty = parseInt(movForm.quantity);
+      setProducts(prev => prev.map(p => p.id === selectedProduct.id ? { ...p, stock: movForm.type === 'IN' ? p.stock + qty : Math.max(0, p.stock - qty) } : p));
+      setModal(null);
+      setMovForm({ type: 'IN', quantity: '', reason: '' });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao registrar movimentação');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openNew() {
+    setForm({ name: '', category: '', price: '', stock: '', barcode: '' });
+    setError('');
+    setModal('product');
   }
 
   function openEdit(p: Product) {
     setSelectedProduct(p);
     setForm({ name: p.name, category: p.category, price: String(p.price), stock: String(p.stock), barcode: p.barcode || '' });
+    setError('');
     setModal('edit');
   }
 
   function openMovement(p: Product, type = 'IN') {
     setSelectedProduct(p);
     setMovForm({ type, quantity: '', reason: '' });
+    setError('');
     setModal('movement');
   }
 
@@ -67,7 +113,7 @@ export default function Estoque() {
           <h1 className="text-2xl font-bold text-white">Estoque</h1>
           <p className="text-zinc-400 text-sm mt-1">{products.length} produtos cadastrados</p>
         </div>
-        <button onClick={() => { setForm({ name: '', category: '', price: '', stock: '', barcode: '' }); setModal('product'); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button onClick={openNew} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Novo Produto
         </button>
       </div>
@@ -113,7 +159,7 @@ export default function Estoque() {
         </table>
       </div>
 
-      {/* Modal novo produto */}
+      {/* Modal novo/editar produto */}
       {(modal === 'product' || modal === 'edit') && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-md">
@@ -137,10 +183,13 @@ export default function Estoque() {
                   className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
                 />
               </div>
+              {error && <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
             </div>
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
               <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white">Cancelar</button>
-              <button onClick={modal === 'edit' ? saveEdit : saveProduct} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg">Salvar</button>
+              <button onClick={modal === 'edit' ? saveEdit : saveProduct} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">
+                {saving ? 'Salvando...' : 'Salvar'}
+              </button>
             </div>
           </div>
         </div>
@@ -164,10 +213,13 @@ export default function Estoque() {
               </div>
               <div><label className="block text-xs text-zinc-400 mb-1">Quantidade *</label><input type="number" value={movForm.quantity} onChange={e => setMovForm(f => ({ ...f, quantity: e.target.value }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" /></div>
               <div><label className="block text-xs text-zinc-400 mb-1">Motivo</label><input value={movForm.reason} onChange={e => setMovForm(f => ({ ...f, reason: e.target.value }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" /></div>
+              {error && <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
             </div>
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
               <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white">Cancelar</button>
-              <button onClick={saveMovement} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg">Confirmar</button>
+              <button onClick={saveMovement} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">
+                {saving ? 'Salvando...' : 'Confirmar'}
+              </button>
             </div>
           </div>
         </div>
