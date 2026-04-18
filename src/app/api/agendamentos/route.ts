@@ -1,5 +1,6 @@
 import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function GET() {
   const rows = await sql`
@@ -12,13 +13,18 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { customer_id, guest_name, guest_phone, motorcycle, plate, service, date, time } = body;
+  try {
+    const body = await req.json();
+    const { customer_id, guest_name, guest_phone, motorcycle, plate, service, date, time } = body;
+    const id = uuidv4();
 
-  const rows = await sql`
-    INSERT INTO appointments (customer_id, guest_name, guest_phone, motorcycle, plate, service, date, time)
-    VALUES (${customer_id}, ${guest_name}, ${guest_phone}, ${motorcycle}, ${plate}, ${service}, ${date}, ${time})
-    RETURNING *
-  `;
-  return NextResponse.json(rows[0], { status: 201 });
+    const rows = await sql`
+      INSERT INTO appointments (id, customer_id, guest_name, guest_phone, motorcycle, plate, service, date, time)
+      VALUES (${id}, ${customer_id}, ${guest_name}, ${guest_phone}, ${motorcycle}, ${plate}, ${service}, ${date}, ${time})
+      RETURNING *
+    `;
+    return NextResponse.json(rows[0], { status: 201 });
+  } catch (error: any) {
+    return new Response(error.message || 'Erro ao salvar agendamento', { status: 500 });
+  }
 }

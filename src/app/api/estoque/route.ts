@@ -1,5 +1,6 @@
 import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function GET() {
   const rows = await sql`
@@ -12,22 +13,27 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { product_id, type, quantity, reason } = body;
+  try {
+    const body = await req.json();
+    const { product_id, type, quantity, reason } = body;
 
-  const product = await sql`SELECT stock FROM products WHERE id = ${product_id}`;
-  if (!product[0]) return NextResponse.json({ error: 'Produto não encontrado' }, { status: 404 });
+    const product = await sql`SELECT stock FROM products WHERE id = ${product_id}`;
+    if (!product[0]) return NextResponse.json({ error: 'Produto não encontrado' }, { status: 404 });
 
-  const currentStock = product[0].stock;
-  const newStock = type === 'IN' ? currentStock + quantity : Math.max(0, currentStock - quantity);
-  const actualQty = type === 'OUT' ? currentStock - newStock : quantity;
+    const currentStock = product[0].stock;
+    const newStock = type === 'IN' ? currentStock + quantity : Math.max(0, currentStock - quantity);
+    const actualQty = type === 'OUT' ? currentStock - newStock : quantity;
 
-  await sql`UPDATE products SET stock = ${newStock} WHERE id = ${product_id}`;
+    await sql`UPDATE products SET stock = ${newStock} WHERE id = ${product_id}`;
 
-  const rows = await sql`
-    INSERT INTO stock_movements (product_id, type, quantity, reason)
-    VALUES (${product_id}, ${type}, ${actualQty}, ${reason})
-    RETURNING *
-  `;
-  return NextResponse.json(rows[0], { status: 201 });
+    const id = uuidv4();
+    const rows = await sql`
+      INSERT INTO stock_movements (id, product_id, type, quantity, reason)
+      VALUES (${id}, ${product_id}, ${type}, ${actualQty}, ${reason})
+      RETURNING *
+    `;
+    return NextResponse.json(rows[0], { status: 201 });
+  } catch (error: any) {
+    return new Response(error.message || 'Erro ao registrar movimentação', { status: 500 });
+  }
 }

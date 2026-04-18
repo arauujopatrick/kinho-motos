@@ -1,5 +1,6 @@
 import { sql } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function GET() {
   const quotes = await sql`
@@ -19,21 +20,27 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { customer_id, guest_name, guest_phone, motorcycle, plate, description, total_value, valid_until, items } = body;
+  try {
+    const body = await req.json();
+    const { customer_id, guest_name, guest_phone, motorcycle, plate, description, total_value, valid_until, items } = body;
+    const id = uuidv4();
 
-  const rows = await sql`
-    INSERT INTO quotes (customer_id, guest_name, guest_phone, motorcycle, plate, description, total_value, valid_until)
-    VALUES (${customer_id}, ${guest_name}, ${guest_phone}, ${motorcycle}, ${plate}, ${description}, ${total_value}, ${valid_until})
-    RETURNING *
-  `;
-  const quote = rows[0];
+    const rows = await sql`
+      INSERT INTO quotes (id, customer_id, guest_name, guest_phone, motorcycle, plate, description, total_value, valid_until)
+      VALUES (${id}, ${customer_id}, ${guest_name}, ${guest_phone}, ${motorcycle}, ${plate}, ${description}, ${total_value}, ${valid_until})
+      RETURNING *
+    `;
+    const quote = rows[0];
 
-  if (items?.length) {
-    for (const item of items) {
-      await sql`INSERT INTO quote_items (quote_id, description, price) VALUES (${quote.id}, ${item.description}, ${item.price})`;
+    if (items?.length) {
+      for (const item of items) {
+        const itemId = uuidv4();
+        await sql`INSERT INTO quote_items (id, quote_id, description, price) VALUES (${itemId}, ${quote.id}, ${item.description}, ${item.price})`;
+      }
     }
-  }
 
-  return NextResponse.json(quote, { status: 201 });
+    return NextResponse.json(quote, { status: 201 });
+  } catch (error: any) {
+    return new Response(error.message || 'Erro ao salvar orçamento', { status: 500 });
+  }
 }
