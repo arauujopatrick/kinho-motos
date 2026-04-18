@@ -8,19 +8,19 @@ export default function Estoque() {
   const [products, setProducts] = useState<Product[]>([]);
   const [modal, setModal] = useState<'product' | 'movement' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [form, setForm] = useState({ name: '', category: '', price: '', stock: '' });
+  const [form, setForm] = useState({ name: '', category: '', price: '', stock: '', barcode: '' });
   const [movForm, setMovForm] = useState({ type: 'IN', quantity: '', reason: '' });
 
   useEffect(() => { fetch('/api/produtos').then(r => r.json()).then(setProducts); }, []);
 
   async function saveProduct() {
     if (!form.name || !form.price) return;
-    const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0 };
+    const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
     const res = await fetch('/api/produtos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const created = await res.json();
     setProducts(prev => [created, ...prev]);
     setModal(null);
-    setForm({ name: '', category: '', price: '', stock: '' });
+    setForm({ name: '', category: '', price: '', stock: '', barcode: '' });
   }
 
   async function saveMovement() {
@@ -98,6 +98,15 @@ export default function Estoque() {
                   <input type={type} value={form[key as keyof typeof form]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                 </div>
               ))}
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Código de Barras</label>
+                <input
+                  value={form.barcode}
+                  onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
+                  placeholder="Escaneie ou digite o código"
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
               <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white">Cancelar</button>
