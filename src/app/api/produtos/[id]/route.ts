@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json();
-  const { name, category, price, stock } = body;
+  const { name, category, price, stock, barcode } = body;
 
   const rows = await sql`
-    UPDATE products SET name = ${name}, category = ${category}, price = ${price}, stock = ${stock}
+    UPDATE products SET name = ${name}, category = ${category}, price = ${price}, stock = ${stock}, barcode = ${barcode ?? null}
     WHERE id = ${id} RETURNING *
   `;
   return NextResponse.json(rows[0]);

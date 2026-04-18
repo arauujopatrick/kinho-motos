@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, X, TrendingUp, TrendingDown, Package } from 'lucide-react';
+import { Plus, X, TrendingUp, TrendingDown, Package, Pencil } from 'lucide-react';
 import type { Product } from '@/types';
 
 export default function Estoque() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [modal, setModal] = useState<'product' | 'movement' | null>(null);
+  const [modal, setModal] = useState<'product' | 'edit' | 'movement' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm] = useState({ name: '', category: '', price: '', stock: '', barcode: '' });
   const [movForm, setMovForm] = useState({ type: 'IN', quantity: '', reason: '' });
@@ -23,6 +23,15 @@ export default function Estoque() {
     setForm({ name: '', category: '', price: '', stock: '', barcode: '' });
   }
 
+  async function saveEdit() {
+    if (!selectedProduct || !form.name || !form.price) return;
+    const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
+    const res = await fetch(`/api/produtos/${selectedProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const updated = await res.json();
+    setProducts(prev => prev.map(p => p.id === selectedProduct.id ? updated : p));
+    setModal(null);
+  }
+
   async function saveMovement() {
     if (!selectedProduct || !movForm.quantity) return;
     await fetch('/api/estoque', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ product_id: selectedProduct.id, type: movForm.type, quantity: parseInt(movForm.quantity), reason: movForm.reason }) });
@@ -32,7 +41,24 @@ export default function Estoque() {
     setMovForm({ type: 'IN', quantity: '', reason: '' });
   }
 
-  function openMovement(p: Product) { setSelectedProduct(p); setModal('movement'); }
+  function openEdit(p: Product) {
+    setSelectedProduct(p);
+    setForm({ name: p.name, category: p.category, price: String(p.price), stock: String(p.stock), barcode: p.barcode || '' });
+    setModal('edit');
+  }
+
+  function openMovement(p: Product, type = 'IN') {
+    setSelectedProduct(p);
+    setMovForm({ type, quantity: '', reason: '' });
+    setModal('movement');
+  }
+
+  const formFields = [
+    ['Nome *', 'name', 'text'],
+    ['Categoria', 'category', 'text'],
+    ['Preço *', 'price', 'number'],
+    ['Estoque', 'stock', 'number'],
+  ];
 
   return (
     <div className="space-y-6">
@@ -41,7 +67,7 @@ export default function Estoque() {
           <h1 className="text-2xl font-bold text-white">Estoque</h1>
           <p className="text-zinc-400 text-sm mt-1">{products.length} produtos cadastrados</p>
         </div>
-        <button onClick={() => setModal('product')} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button onClick={() => { setForm({ name: '', category: '', price: '', stock: '', barcode: '' }); setModal('product'); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Novo Produto
         </button>
       </div>
@@ -52,13 +78,14 @@ export default function Estoque() {
             <tr className="border-b border-zinc-800">
               <th className="text-left px-4 py-3 text-zinc-400 font-medium">Produto</th>
               <th className="text-left px-4 py-3 text-zinc-400 font-medium">Categoria</th>
+              <th className="text-left px-4 py-3 text-zinc-400 font-medium">Cód. Barras</th>
               <th className="text-right px-4 py-3 text-zinc-400 font-medium">Preço</th>
               <th className="text-right px-4 py-3 text-zinc-400 font-medium">Estoque</th>
-              <th className="px-4 py-3 w-24"></th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
-            {products.length === 0 && <tr><td colSpan={5} className="text-center py-10 text-zinc-500">Nenhum produto</td></tr>}
+            {products.length === 0 && <tr><td colSpan={6} className="text-center py-10 text-zinc-500">Nenhum produto</td></tr>}
             {products.map(p => (
               <tr key={p.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
                 <td className="px-4 py-3">
@@ -68,14 +95,16 @@ export default function Estoque() {
                   </div>
                 </td>
                 <td className="px-4 py-3 text-zinc-400">{p.category}</td>
+                <td className="px-4 py-3 text-zinc-500 font-mono text-xs">{p.barcode || '—'}</td>
                 <td className="px-4 py-3 text-right text-white">R$ {Number(p.price).toFixed(2)}</td>
                 <td className="px-4 py-3 text-right">
                   <span className={`font-semibold ${p.stock <= 2 ? 'text-red-400' : p.stock <= 5 ? 'text-yellow-400' : 'text-green-400'}`}>{p.stock}</span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2 justify-end">
-                    <button onClick={() => openMovement(p)} className="text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-2 py-1 rounded flex items-center gap-1"><TrendingUp size={12} /> Entrada</button>
-                    <button onClick={() => { setSelectedProduct(p); setMovForm(f => ({ ...f, type: 'OUT' })); setModal('movement'); }} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1"><TrendingDown size={12} /> Saída</button>
+                    <button onClick={() => openEdit(p)} className="text-xs bg-zinc-700 text-zinc-300 hover:bg-zinc-600 px-2 py-1 rounded flex items-center gap-1"><Pencil size={12} /> Editar</button>
+                    <button onClick={() => openMovement(p, 'IN')} className="text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-2 py-1 rounded flex items-center gap-1"><TrendingUp size={12} /> Entrada</button>
+                    <button onClick={() => openMovement(p, 'OUT')} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1"><TrendingDown size={12} /> Saída</button>
                   </div>
                 </td>
               </tr>
@@ -84,15 +113,16 @@ export default function Estoque() {
         </table>
       </div>
 
-      {modal === 'product' && (
+      {/* Modal novo produto */}
+      {(modal === 'product' || modal === 'edit') && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-zinc-800">
-              <h2 className="font-semibold text-white">Novo Produto</h2>
+              <h2 className="font-semibold text-white">{modal === 'edit' ? 'Editar Produto' : 'Novo Produto'}</h2>
               <button onClick={() => setModal(null)} className="text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
-              {[['Nome *', 'name', 'text'], ['Categoria', 'category', 'text'], ['Preço *', 'price', 'number'], ['Estoque inicial', 'stock', 'number']].map(([label, key, type]) => (
+              {formFields.map(([label, key, type]) => (
                 <div key={key}>
                   <label className="block text-xs text-zinc-400 mb-1">{label}</label>
                   <input type={type} value={form[key as keyof typeof form]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
@@ -110,12 +140,13 @@ export default function Estoque() {
             </div>
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
               <button onClick={() => setModal(null)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white">Cancelar</button>
-              <button onClick={saveProduct} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg">Salvar</button>
+              <button onClick={modal === 'edit' ? saveEdit : saveProduct} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg">Salvar</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Modal movimentação */}
       {modal === 'movement' && selectedProduct && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-md">
