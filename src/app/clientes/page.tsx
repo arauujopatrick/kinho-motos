@@ -12,6 +12,8 @@ export default function Clientes() {
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [form, setForm] = useState(empty);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => { fetch('/api/clientes').then(r => r.json()).then(setCustomers); }, []);
 
@@ -26,16 +28,26 @@ export default function Clientes() {
 
   async function save() {
     if (!form.name || !form.phone) return;
-    if (editing) {
-      const res = await fetch(`/api/clientes/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-      const updated = await res.json();
-      setCustomers(prev => prev.map(c => c.id === editing.id ? updated : c));
-    } else {
-      const res = await fetch('/api/clientes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-      const created = await res.json();
-      setCustomers(prev => [created, ...prev]);
+    setSaving(true);
+    setError('');
+    try {
+      if (editing) {
+        const res = await fetch(`/api/clientes/${editing.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+        if (!res.ok) throw new Error(await res.text());
+        const updated = await res.json();
+        setCustomers(prev => prev.map(c => c.id === editing.id ? updated : c));
+      } else {
+        const res = await fetch('/api/clientes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+        if (!res.ok) throw new Error(await res.text());
+        const created = await res.json();
+        setCustomers(prev => [created, ...prev]);
+      }
+      setModal(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao salvar');
+    } finally {
+      setSaving(false);
     }
-    setModal(false);
   }
 
   async function remove(id: string) {
@@ -115,10 +127,13 @@ export default function Clientes() {
               <Field label="Placa" value={form.plate} onChange={v => setForm(f => ({ ...f, plate: v.toUpperCase() }))} />
               <Field label="Endereço" value={form.address} onChange={v => setForm(f => ({ ...f, address: v }))} span />
               <Field label="Observações" value={form.observations} onChange={v => setForm(f => ({ ...f, observations: v }))} span />
+              {error && <p className="col-span-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
             </div>
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
               <button onClick={() => setModal(false)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
-              <button onClick={save} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors">Salvar</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">
+                {saving ? 'Salvando...' : 'Salvar'}
+              </button>
             </div>
           </div>
         </div>
