@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, X, TrendingUp, TrendingDown, Package, Pencil } from 'lucide-react';
+import { Plus, X, TrendingUp, TrendingDown, Package, Pencil, Trash2 } from 'lucide-react';
 import type { Product } from '@/types';
 
 export default function Estoque() {
@@ -99,6 +99,16 @@ export default function Estoque() {
     setModal('movement');
   }
 
+  async function removeProduct(id: string) {
+    if (!confirm('Tem certeza que deseja excluir este produto?')) return;
+    try {
+      await fetch(`/api/produtos/${id}`, { method: 'DELETE' });
+      setProducts(prev => prev.filter(p => p.id !== id));
+    } catch {
+      alert('Erro ao excluir produto');
+    }
+  }
+
   const formFields = [
     ['Nome *', 'name', 'text'],
     ['Categoria', 'category', 'text'],
@@ -151,6 +161,7 @@ export default function Estoque() {
                     <button onClick={() => openEdit(p)} className="text-xs bg-zinc-700 text-zinc-300 hover:bg-zinc-600 px-2 py-1 rounded flex items-center gap-1"><Pencil size={12} /> Editar</button>
                     <button onClick={() => openMovement(p, 'IN')} className="text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-2 py-1 rounded flex items-center gap-1"><TrendingUp size={12} /> Entrada</button>
                     <button onClick={() => openMovement(p, 'OUT')} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1"><TrendingDown size={12} /> Saída</button>
+                    <button onClick={() => removeProduct(p.id)} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-1 rounded flex items-center gap-1"><Trash2 size={12} /> Excluir</button>
                   </div>
                 </td>
               </tr>
