@@ -9,10 +9,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { name, phone, whatsapp, email, motorcycle, plate, address, observations } = body;
+  
+  const id = crypto.randomUUID();
 
   const rows = await sql`
-    INSERT INTO customers (name, phone, whatsapp, email, motorcycle, plate, address, observations)
-    VALUES (${name}, ${phone}, ${whatsapp}, ${email}, ${motorcycle}, ${plate}, ${address}, ${observations})
+    INSERT INTO customers (id, name, phone, whatsapp, email, motorcycle, plate, address, observations)
+    VALUES (${id}, ${name}, ${phone}, ${whatsapp}, ${email}, ${motorcycle}, ${plate}, ${address}, ${observations})
     RETURNING *
   `;
   return NextResponse.json(rows[0], { status: 201 });

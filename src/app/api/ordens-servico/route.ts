@@ -25,19 +25,23 @@ export async function POST(req: NextRequest) {
     motorcycle, plate, description, total_value,
     promised_date, payment_method, card_installments, items
   } = body;
+  
+  const id = crypto.randomUUID();
 
   const rows = await sql`
-    INSERT INTO service_orders (customer_id, guest_name, guest_phone, customer_contact, motorcycle, plate, description, total_value, promised_date, payment_method, card_installments)
-    VALUES (${customer_id}, ${guest_name}, ${guest_phone}, ${customer_contact}, ${motorcycle}, ${plate}, ${description}, ${total_value}, ${promised_date}, ${payment_method}, ${card_installments})
+    INSERT INTO service_orders (id, customer_id, guest_name, guest_phone, customer_contact, motorcycle, plate, description, total_value, promised_date, payment_method, card_installments)
+    VALUES (${id}, ${customer_id}, ${guest_name}, ${guest_phone}, ${customer_contact}, ${motorcycle}, ${plate}, ${description}, ${total_value}, ${promised_date}, ${payment_method}, ${card_installments})
     RETURNING *
   `;
   const order = rows[0];
 
   if (items?.length) {
     for (const item of items) {
-      await sql`INSERT INTO service_order_items (service_order_id, description, price) VALUES (${order.id}, ${item.description}, ${item.price})`;
+      const itemId = crypto.randomUUID();
+      await sql`INSERT INTO service_order_items (id, service_order_id, description, price) VALUES (${itemId}, ${order.id}, ${item.description}, ${item.price})`;
     }
   }
 
   return NextResponse.json(order, { status: 201 });
 }
+
