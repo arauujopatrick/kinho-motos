@@ -81,7 +81,7 @@ export default function Estoque() {
   }
 
   function openNew() {
-    setForm({ name: '', category: '', price: '', stock: '', barcode: '' });
+    setForm({ name: '', category: '', price: '', cost: '', stock: '', barcode: '' });
     setError('');
     setModal('product');
   }
