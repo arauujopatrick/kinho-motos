@@ -10,12 +10,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { name, category, price, stock, barcode } = body;
+    const { name, category, price, stock, barcode, cost } = body;
     const id = uuidv4();
 
     const rows = await sql`
-      INSERT INTO products (id, name, category, price, stock, barcode)
-      VALUES (${id}, ${name}, ${category}, ${price}, ${stock ?? 0}, ${barcode ?? null})
+      INSERT INTO products (id, name, category, price, stock, barcode, cost)
+      VALUES (${id}, ${name}, ${category}, ${price}, ${stock ?? 0}, ${barcode ?? null}, ${cost ?? 0})
       RETURNING *
     `;
     return NextResponse.json(rows[0], { status: 201 });

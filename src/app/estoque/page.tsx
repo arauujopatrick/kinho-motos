@@ -8,7 +8,7 @@ export default function Estoque() {
   const [products, setProducts] = useState<Product[]>([]);
   const [modal, setModal] = useState<'product' | 'edit' | 'movement' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [form, setForm] = useState({ name: '', category: '', price: '', stock: '', barcode: '' });
+  const [form, setForm] = useState({ name: '', category: '', price: '', cost: '', stock: '', barcode: '' });
   const [movForm, setMovForm] = useState({ type: 'IN', quantity: '', reason: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -23,13 +23,13 @@ export default function Estoque() {
     setSaving(true);
     setError('');
     try {
-      const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
+      const body = { name: form.name, category: form.category, price: parseFloat(form.price), cost: parseFloat(form.cost) || 0, stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
       const res = await fetch('/api/produtos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       const created = await res.json();
       setProducts(prev => [created, ...prev]);
       setModal(null);
-      setForm({ name: '', category: '', price: '', stock: '', barcode: '' });
+      setForm({ name: '', category: '', price: '', cost: '', stock: '', barcode: '' });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao salvar produto');
     } finally {
@@ -45,7 +45,7 @@ export default function Estoque() {
     setSaving(true);
     setError('');
     try {
-      const body = { name: form.name, category: form.category, price: parseFloat(form.price), stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
+      const body = { name: form.name, category: form.category, price: parseFloat(form.price), cost: parseFloat(form.cost) || 0, stock: parseInt(form.stock) || 0, barcode: form.barcode || null };
       const res = await fetch(`/api/produtos/${selectedProduct.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
       const updated = await res.json();
@@ -87,7 +87,7 @@ export default function Estoque() {
 
   function openEdit(p: Product) {
     setSelectedProduct(p);
-    setForm({ name: p.name, category: p.category, price: String(p.price), stock: String(p.stock), barcode: p.barcode || '' });
+    setForm({ name: p.name, category: p.category, price: String(p.price), cost: String(p.cost ?? ''), stock: String(p.stock), barcode: p.barcode || '' });
     setError('');
     setModal('edit');
   }
@@ -112,7 +112,8 @@ export default function Estoque() {
   const formFields = [
     ['Nome *', 'name', 'text'],
     ['Categoria', 'category', 'text'],
-    ['Preço *', 'price', 'number'],
+    ['Preço de Venda *', 'price', 'number'],
+    ['Custo', 'cost', 'number'],
     ['Estoque', 'stock', 'number'],
   ];
 

@@ -38,6 +38,7 @@ export default function Financeiro() {
   const income = transactions.filter(t => t.type === 'INCOME').reduce((s, t) => s + Number(t.value), 0);
   const expense = transactions.filter(t => t.type === 'EXPENSE').reduce((s, t) => s + Number(t.value), 0);
   const balance = income - expense;
+  const profit = income - expense;
 
   function changeMonth(offset: number) {
     const [y, m] = month.split('-').map(Number);
@@ -129,7 +130,7 @@ export default function Financeiro() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
           <div className="flex items-center gap-2 mb-2"><TrendingUp size={16} className="text-green-400" /><span className="text-zinc-400 text-sm">Receitas</span></div>
           <p className="text-2xl font-bold text-green-400">R$ {income.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
@@ -141,6 +142,13 @@ export default function Financeiro() {
         <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
           <div className="flex items-center gap-2 mb-2"><DollarSign size={16} className="text-orange-400" /><span className="text-zinc-400 text-sm">Saldo</span></div>
           <p className={`text-2xl font-bold ${balance >= 0 ? 'text-white' : 'text-red-400'}`}>R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+        </div>
+        <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            {profit >= 0 ? <TrendingUp size={16} className="text-emerald-400" /> : <TrendingDown size={16} className="text-red-400" />}
+            <span className="text-zinc-400 text-sm">Lucro Líquido</span>
+          </div>
+          <p className={`text-2xl font-bold ${profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>R$ {profit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
       </div>
 

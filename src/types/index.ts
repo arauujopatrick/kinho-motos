@@ -16,6 +16,7 @@ export interface Product {
   name: string;
   category: string;
   price: number;
+  cost?: number;
   stock: number;
   barcode?: string;
   created_at: string;
