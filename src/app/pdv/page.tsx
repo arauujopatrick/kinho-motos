@@ -32,7 +32,9 @@ export default function PDV() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const total = cart.reduce((s, i) => s + i.subtotal, 0);
+  const subtotal = cart.reduce((s, i) => s + i.subtotal, 0);
+  const cardFee = paymentMethod === 'Cartão' ? 3 : 0;
+  const total = subtotal + cardFee;
   const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) && p.stock > 0
   );
@@ -99,7 +101,7 @@ export default function PDV() {
     const res = await fetch('/api/pdv', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, payment_method: paymentMethod, customer_name: customerName }),
+      body: JSON.stringify({ items, payment_method: paymentMethod, customer_name: customerName, card_fee: cardFee }),
     });
 
     if (res.ok) {
@@ -242,9 +244,23 @@ export default function PDV() {
             {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
           </select>
 
-          <div className="flex items-center justify-between py-2 border-t border-zinc-700">
-            <span className="text-zinc-400 text-sm">Total</span>
-            <span className="text-xl font-bold text-white">R$ {total.toFixed(2).replace('.', ',')}</span>
+          <div className="border-t border-zinc-700 pt-2 space-y-1">
+            {cardFee > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 text-sm">Subtotal</span>
+                  <span className="text-zinc-300 text-sm">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-yellow-400 text-sm">Taxa Cartão</span>
+                  <span className="text-yellow-400 text-sm">+ R$ 3,00</span>
+                </div>
+              </>
+            )}
+            <div className="flex items-center justify-between py-1">
+              <span className="text-zinc-400 text-sm">Total</span>
+              <span className="text-xl font-bold text-white">R$ {total.toFixed(2).replace('.', ',')}</span>
+            </div>
           </div>
 
           <button

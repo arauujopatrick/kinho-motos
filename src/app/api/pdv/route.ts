@@ -5,10 +5,11 @@ import { v4 as uuidv4 } from 'uuid';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { items, payment_method, customer_name } = body;
+    const { items, payment_method, customer_name, card_fee = 0 } = body;
     // items: [{ product_id, name, quantity, unit_price, subtotal }]
 
-    const total = items.reduce((s: number, i: { subtotal: number }) => s + i.subtotal, 0);
+    const itemsTotal = items.reduce((s: number, i: { subtotal: number }) => s + i.subtotal, 0);
+    const total = itemsTotal + card_fee;
 
     // Baixa estoque de cada item
     for (const item of items) {
