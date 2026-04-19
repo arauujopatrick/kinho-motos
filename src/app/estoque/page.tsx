@@ -9,6 +9,7 @@ export default function Estoque() {
   const [modal, setModal] = useState<'product' | 'edit' | 'movement' | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm] = useState({ name: '', category: '', price: '', cost: '', stock: '', barcode: '' });
+  const [filterCategory, setFilterCategory] = useState('Todos');
   const [movForm, setMovForm] = useState({ type: 'IN', quantity: '', reason: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -109,9 +110,11 @@ export default function Estoque() {
     }
   }
 
+  const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
+  const visibleProducts = filterCategory === 'Todos' ? products : products.filter(p => p.category === filterCategory);
+
   const formFields = [
     ['Nome *', 'name', 'text'],
-    ['Categoria', 'category', 'text'],
     ['Preço de Venda *', 'price', 'number'],
     ['Custo', 'cost', 'number'],
     ['Estoque', 'stock', 'number'],
@@ -129,6 +132,23 @@ export default function Estoque() {
         </button>
       </div>
 
+      {/* Filtros de categoria */}
+      <div className="flex gap-2 flex-wrap">
+        {categories.map(cat => (
+          <button
+            key={cat}
+            onClick={() => setFilterCategory(cat)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              filterCategory === cat
+                ? 'bg-orange-500 text-white'
+                : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+            }`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
       <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -142,8 +162,8 @@ export default function Estoque() {
             </tr>
           </thead>
           <tbody>
-            {products.length === 0 && <tr><td colSpan={6} className="text-center py-10 text-zinc-500">Nenhum produto</td></tr>}
-            {products.map(p => (
+            {visibleProducts.length === 0 && <tr><td colSpan={6} className="text-center py-10 text-zinc-500">Nenhum produto</td></tr>}
+            {visibleProducts.map(p => (
               <tr key={p.id} className="border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -186,6 +206,22 @@ export default function Estoque() {
                   <input type={type} value={form[key as keyof typeof form]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                 </div>
               ))}
+              {/* Categoria com sugestões */}
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Categoria</label>
+                <input
+                  list="category-list"
+                  value={form.category}
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                  placeholder="Digite ou selecione..."
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+                />
+                <datalist id="category-list">
+                  {Array.from(new Set(products.map(p => p.category).filter(Boolean))).map(c => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Código de Barras</label>
                 <input
