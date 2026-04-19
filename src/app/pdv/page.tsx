@@ -9,18 +9,27 @@ const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Cartão'];
 export default function PDV() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone: string }[]>([]);
   const [search, setSearch] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Dinheiro');
   const [customerName, setCustomerName] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showCustomerList, setShowCustomerList] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const barcodeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch('/api/produtos').then(r => r.json()).then(setProducts);
+    fetch('/api/clientes').then(r => r.json()).then(setCustomers);
     barcodeRef.current?.focus();
   }, []);
+
+  const filteredCustomers = customers.filter(c =>
+    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    c.phone.includes(customerSearch)
+  ).slice(0, 6);
 
   // Foca no campo de barcode quando clicar fora de inputs
   useEffect(() => {
@@ -230,12 +239,39 @@ export default function PDV() {
 
         {/* Finalização */}
         <div className="p-4 border-t border-zinc-800 space-y-3">
-          <input
-            value={customerName}
-            onChange={e => setCustomerName(e.target.value)}
-            placeholder="Cliente (opcional)"
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
-          />
+          <div className="relative">
+            <input
+              value={customerSearch || customerName}
+              onChange={e => {
+                const v = e.target.value;
+                setCustomerSearch(v);
+                setCustomerName(v);
+                setShowCustomerList(true);
+              }}
+              onFocus={() => setShowCustomerList(true)}
+              onBlur={() => setTimeout(() => setShowCustomerList(false), 150)}
+              placeholder="Cliente (opcional)"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+            />
+            {showCustomerList && filteredCustomers.length > 0 && (
+              <ul className="absolute bottom-full mb-1 w-full bg-zinc-800 border border-zinc-700 rounded-lg overflow-hidden shadow-xl z-10">
+                {filteredCustomers.map(c => (
+                  <li
+                    key={c.id}
+                    onMouseDown={() => {
+                      setCustomerName(c.name);
+                      setCustomerSearch('');
+                      setShowCustomerList(false);
+                    }}
+                    className="px-3 py-2 text-sm text-white hover:bg-zinc-700 cursor-pointer"
+                  >
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-zinc-500 text-xs ml-2">{c.phone}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <select
             value={paymentMethod}
             onChange={e => setPaymentMethod(e.target.value)}
