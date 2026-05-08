@@ -2,12 +2,12 @@ export interface Customer {
   id: string;
   name: string;
   phone: string;
-  whatsapp: string;
-  email?: string;
-  motorcycle?: string;
-  plate?: string;
-  address?: string;
-  observations?: string;
+  whatsapp: string | null;
+  email?: string | null;
+  motorcycle?: string | null;
+  plate?: string | null;
+  address?: string | null;
+  observations?: string | null;
   created_at: string;
 }
 
