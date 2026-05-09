@@ -5,12 +5,70 @@ import { Plus, Search, X, MessageCircle, CheckCircle } from 'lucide-react';
 import type { ServiceOrder, Customer, ServiceItem } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatPhone, normalizePlate } from '@/lib/customer-utils';
 
 const SERVICES = ['Troca de Óleo', 'Revisão Geral', 'Pastilha de Freio', 'Pneu', 'Relação', 'Vela', 'Filtro de Ar', 'Corrente', 'Amortecedor', 'Elétrica'];
 const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Cartão'];
 const STATUS_OPTIONS = ['Aberto', 'Em andamento', 'Finalizado'];
 
 const emptyForm = { customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', description: '', promised_date: '', payment_method: 'Dinheiro', card_installments: '', items: [] as ServiceItem[] };
+
+type ApiErrorResponse = {
+  message?: string;
+  error?: string;
+};
+
+const normalizeDigits = (value: string) => value.replace(/\D/g, '');
+
+const isValidPhoneDigits = (value: string) =>
+  value.length === 10 || value.length === 11;
+
+async function getResponseMessage(response: Response, fallbackMessage: string) {
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      const data = (await response.json()) as ApiErrorResponse;
+      if (typeof data.message === 'string' && data.message.trim()) {
+        return data.message;
+      }
+      if (typeof data.error === 'string' && data.error.trim()) {
+        return data.error;
+      }
+    } catch {
+      // Ignore parse errors and fall back to plain text.
+    }
+  }
+
+  try {
+    const text = await response.text();
+    if (text.trim()) {
+      return text;
+    }
+  } catch {
+    // Ignore parse errors and use fallback.
+  }
+
+  return fallbackMessage;
+}
+
+async function fetchOrdersFromApi() {
+  const response = await fetch('/api/ordens-servico', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(await getResponseMessage(response, 'Não foi possível carregar as ordens de serviço agora.'));
+  }
+
+  return (await response.json()) as ServiceOrder[];
+}
+
+async function fetchCustomersFromApi() {
+  const response = await fetch('/api/clientes', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(await getResponseMessage(response, 'Não foi possível carregar os clientes agora.'));
+  }
+
+  return (await response.json()) as Customer[];
+}
 
 export default function OrdensServico() {
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
@@ -21,12 +79,40 @@ export default function OrdensServico() {
   const [form, setForm] = useState(emptyForm);
   const [itemDesc, setItemDesc] = useState('');
   const [itemPrice, setItemPrice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/ordens-servico').then(r => r.json()),
-      fetch('/api/clientes').then(r => r.json()),
-    ]).then(([o, c]) => { setOrders(o); setCustomers(c); });
+    let isMounted = true;
+
+    void Promise.all([fetchOrdersFromApi(), fetchCustomersFromApi()])
+      .then(([loadedOrders, loadedCustomers]) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setOrders(loadedOrders);
+        setCustomers(loadedCustomers);
+        setPageError('');
+      })
+      .catch((loadError) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setPageError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar os dados de ordens de serviço agora.');
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoadingData(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const filtered = orders.filter(o => {
@@ -47,27 +133,128 @@ export default function OrdensServico() {
   const cardFee = form.payment_method === 'Cartão' ? 3 : 0;
   const total = subtotal + cardFee;
 
+  async function refreshOrders(showLoader = false) {
+    if (showLoader) {
+      setLoadingData(true);
+    }
+
+    try {
+      const latestOrders = await fetchOrdersFromApi();
+      setOrders(latestOrders);
+      setPageError('');
+      return latestOrders;
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Não foi possível carregar as ordens de serviço agora.';
+      setPageError(message);
+      throw loadError;
+    } finally {
+      if (showLoader) {
+        setLoadingData(false);
+      }
+    }
+  }
+
   async function save() {
-    if (!form.promised_date) return;
-    const customer = customers.find(c => c.id === form.customer_id);
-    const body = { ...form, total_value: total, customer_contact: customer ? (customer.whatsapp || customer.phone) : form.guest_phone, motorcycle: form.motorcycle || customer?.motorcycle || '', plate: form.plate || customer?.plate || '' };
-    const res = await fetch('/api/ordens-servico', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const created = await res.json();
-    setOrders(prev => [created, ...prev]);
-    setModal(false);
-    setForm(emptyForm);
+    const customer = customers.find((item) => item.id === form.customer_id);
+    const guestPhoneDigits = normalizeDigits(form.guest_phone);
+    const motorcycle = (form.motorcycle || customer?.motorcycle || '').trim();
+    const plate = normalizePlate(form.plate || customer?.plate || '') || '';
+
+    if (!form.customer_id && !form.guest_name.trim()) {
+      setError('Selecione um cliente ou informe o nome do cliente avulso.');
+      return;
+    }
+
+    if (!form.customer_id && !isValidPhoneDigits(guestPhoneDigits)) {
+      setError('Informe um telefone válido para o cliente avulso.');
+      return;
+    }
+
+    if (!motorcycle) {
+      setError('Informe a moto desta ordem de serviço.');
+      return;
+    }
+
+    if (!form.promised_date) {
+      setError('Informe a data de entrega da OS.');
+      return;
+    }
+
+    if (form.items.length === 0) {
+      setError('Adicione pelo menos um item à OS.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    const body = {
+      ...form,
+      guest_name: form.guest_name.trim(),
+      guest_phone: guestPhoneDigits ? formatPhone(guestPhoneDigits) : '',
+      motorcycle,
+      plate,
+      total_value: total,
+      customer_contact: customer ? (customer.whatsapp || customer.phone) : formatPhone(guestPhoneDigits),
+    };
+
+    try {
+      const response = await fetch('/api/ordens-servico', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getResponseMessage(response, 'Não foi possível cadastrar a ordem de serviço agora.'));
+      }
+
+      const created = (await response.json()) as ServiceOrder;
+      setOrders((currentOrders) => [created, ...currentOrders]);
+      setModal(false);
+      setForm(emptyForm);
+      setItemDesc('');
+      setItemPrice('');
+
+      void refreshOrders().catch(() => {
+        setPageError('OS criada, mas não foi possível atualizar a listagem agora.');
+      });
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Não foi possível cadastrar a ordem de serviço agora.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function updateStatus(id: string, status: string) {
-    const res = await fetch(`/api/ordens-servico/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-    const updated = await res.json();
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updated } : o));
+    setPageError('');
 
-    if (status === 'Finalizado') {
-      const order = orders.find(o => o.id === id);
-      if (order) {
-        await fetch('/api/financeiro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: `OS - ${order.motorcycle} ${order.plate || ''}`.trim(), type: 'INCOME', value: order.total_value, payment_method: order.payment_method, source_id: id, date: new Date().toISOString() }) });
+    try {
+      const response = await fetch(`/api/ordens-servico/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getResponseMessage(response, 'Não foi possível atualizar o status desta OS.'));
       }
+
+      const updated = (await response.json()) as ServiceOrder;
+      setOrders((currentOrders) => currentOrders.map((order) => order.id === id ? { ...order, ...updated } : order));
+
+      if (status === 'Finalizado') {
+        const order = orders.find((item) => item.id === id);
+        if (order) {
+          await fetch('/api/financeiro', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: `OS - ${order.motorcycle} ${order.plate || ''}`.trim(), type: 'INCOME', value: order.total_value, payment_method: order.payment_method, source_id: id, date: new Date().toISOString() }),
+          });
+        }
+      }
+    } catch (statusError) {
+      setPageError(statusError instanceof Error ? statusError.message : 'Não foi possível atualizar o status desta OS.');
     }
   }
 
@@ -84,12 +271,23 @@ export default function OrdensServico() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Ordens de Serviço</h1>
-          <p className="text-zinc-400 text-sm mt-1">{orders.filter(o => o.status !== 'Finalizado').length} OS abertas</p>
+          <p className="text-zinc-400 text-sm mt-1">
+            {loadingData ? 'Carregando ordens de serviço...' : `${orders.filter(o => o.status !== 'Finalizado').length} OS abertas`}
+          </p>
         </div>
-        <button onClick={() => { setForm(emptyForm); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button onClick={() => { setForm(emptyForm); setItemDesc(''); setItemPrice(''); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Nova OS
         </button>
       </div>
+
+      {pageError && (
+        <div className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 text-red-300 text-sm px-4 py-3 rounded-lg">
+          <span>{pageError}</span>
+          <button onClick={() => void refreshOrders(true)} className="text-xs font-medium text-red-200 hover:text-white transition-colors">
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-3">
         <div className="relative flex-1">
@@ -103,7 +301,8 @@ export default function OrdensServico() {
       </div>
 
       <div className="grid gap-4">
-        {filtered.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS encontrada</p>}
+        {loadingData && orders.length === 0 && <p className="text-center text-zinc-500 py-10">Carregando ordens de serviço...</p>}
+        {!loadingData && filtered.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS encontrada</p>}
         {filtered.map(o => (
           <div key={o.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
             <div className="flex items-start justify-between gap-4">
@@ -147,7 +346,7 @@ export default function OrdensServico() {
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-zinc-800 sticky top-0 bg-zinc-900">
               <h2 className="font-semibold text-white">Nova Ordem de Serviço</h2>
-              <button onClick={() => setModal(false)} className="text-zinc-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => { setModal(false); setError(''); }} className="text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
               <div>
@@ -220,8 +419,11 @@ export default function OrdensServico() {
               </div>
             </div>
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
-              <button onClick={() => setModal(false)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
-              <button onClick={save} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors">Criar OS</button>
+              {error && <p className="mr-auto text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+              <button onClick={() => { setModal(false); setError(''); }} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">
+                {saving ? 'Salvando...' : 'Criar OS'}
+              </button>
             </div>
           </div>
         </div>
