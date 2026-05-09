@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Search, X, MessageCircle, CheckCircle } from 'lucide-react';
+import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2 } from 'lucide-react';
 import type { ServiceOrder, Customer, ServiceItem } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -18,6 +18,7 @@ export default function OrdensServico() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [modal, setModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [itemDesc, setItemDesc] = useState('');
   const [itemPrice, setItemPrice] = useState('');
@@ -58,17 +59,48 @@ export default function OrdensServico() {
     try {
       const customer = customers.find(c => c.id === form.customer_id);
       const body = { ...form, total_value: total, customer_contact: customer ? (customer.whatsapp || customer.phone) : form.guest_phone, motorcycle: form.motorcycle || customer?.motorcycle || '', plate: form.plate || customer?.plate || '' };
-      const res = await fetch('/api/ordens-servico', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const url = editingId ? `/api/ordens-servico/${editingId}` : '/api/ordens-servico';
+      const method = editingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(await res.text());
-      const created = await res.json();
-      setOrders(prev => [created, ...prev]);
+      const saved = await res.json();
+      if (editingId) {
+        setOrders(prev => prev.map(o => o.id === editingId ? { ...o, ...saved } : o));
+      } else {
+        setOrders(prev => [saved, ...prev]);
+      }
       setModal(false);
+      setEditingId(null);
       setForm(emptyForm);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao salvar');
     } finally {
       setSaving(false);
     }
+  }
+
+  function openEdit(o: ServiceOrder) {
+    setEditingId(o.id);
+    setForm({
+      customer_id: o.customer_id || '',
+      guest_name: o.guest_name || '',
+      guest_phone: o.guest_phone || '',
+      motorcycle: o.motorcycle || '',
+      plate: o.plate || '',
+      description: o.description || '',
+      promised_date: o.promised_date ? String(o.promised_date).slice(0, 10) : '',
+      payment_method: o.payment_method || 'Dinheiro',
+      card_installments: o.card_installments ? String(o.card_installments) : '',
+      items: o.items || [],
+    });
+    setError('');
+    setModal(true);
+  }
+
+  async function removeOrder(id: string) {
+    if (!confirm('Excluir esta OS?')) return;
+    const res = await fetch(`/api/ordens-servico/${id}`, { method: 'DELETE' });
+    if (res.ok) setOrders(prev => prev.filter(o => o.id !== id));
   }
 
   async function updateStatus(id: string, status: string) {
@@ -99,7 +131,7 @@ export default function OrdensServico() {
           <h1 className="text-2xl font-bold text-white">Ordens de Serviço</h1>
           <p className="text-zinc-400 text-sm mt-1">{orders.filter(o => o.status !== 'Finalizado').length} OS abertas</p>
         </div>
-        <button onClick={() => { setForm(emptyForm); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button onClick={() => { setEditingId(null); setForm(emptyForm); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Nova OS
         </button>
       </div>
@@ -150,6 +182,12 @@ export default function OrdensServico() {
                   <CheckCircle size={14} /> Finalizar
                 </button>
               )}
+              <button onClick={() => openEdit(o)} className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white px-3 py-1.5 rounded-lg transition-colors ml-auto">
+                <Pencil size={14} /> Editar
+              </button>
+              <button onClick={() => removeOrder(o.id)} className="flex items-center gap-1.5 text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-colors">
+                <Trash2 size={14} /> Excluir
+              </button>
             </div>
           </div>
         ))}
@@ -159,8 +197,8 @@ export default function OrdensServico() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-zinc-800 sticky top-0 bg-zinc-900">
-              <h2 className="font-semibold text-white">Nova Ordem de Serviço</h2>
-              <button onClick={() => setModal(false)} className="text-zinc-400 hover:text-white"><X size={18} /></button>
+              <h2 className="font-semibold text-white">{editingId ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço'}</h2>
+              <button onClick={() => { setModal(false); setEditingId(null); }} className="text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
               <div>
@@ -234,8 +272,8 @@ export default function OrdensServico() {
             </div>
             {error && <p className="mx-5 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
-              <button onClick={() => setModal(false)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">{saving ? 'Salvando...' : 'Criar OS'}</button>
+              <button onClick={() => { setModal(false); setEditingId(null); }} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">{saving ? 'Salvando...' : (editingId ? 'Salvar' : 'Criar OS')}</button>
             </div>
           </div>
         </div>
