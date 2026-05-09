@@ -21,6 +21,8 @@ export default function OrdensServico() {
   const [form, setForm] = useState(emptyForm);
   const [itemDesc, setItemDesc] = useState('');
   const [itemPrice, setItemPrice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -48,14 +50,25 @@ export default function OrdensServico() {
   const total = subtotal + cardFee;
 
   async function save() {
-    if (!form.promised_date) return;
-    const customer = customers.find(c => c.id === form.customer_id);
-    const body = { ...form, total_value: total, customer_contact: customer ? (customer.whatsapp || customer.phone) : form.guest_phone, motorcycle: form.motorcycle || customer?.motorcycle || '', plate: form.plate || customer?.plate || '' };
-    const res = await fetch('/api/ordens-servico', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const created = await res.json();
-    setOrders(prev => [created, ...prev]);
-    setModal(false);
-    setForm(emptyForm);
+    if (!form.promised_date) { setError('Informe a data de entrega'); return; }
+    if (form.items.length === 0) { setError('Adicione ao menos um serviço/peça'); return; }
+    if (!form.customer_id && !form.guest_name) { setError('Selecione um cliente ou informe o nome'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const customer = customers.find(c => c.id === form.customer_id);
+      const body = { ...form, total_value: total, customer_contact: customer ? (customer.whatsapp || customer.phone) : form.guest_phone, motorcycle: form.motorcycle || customer?.motorcycle || '', plate: form.plate || customer?.plate || '' };
+      const res = await fetch('/api/ordens-servico', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      setOrders(prev => [created, ...prev]);
+      setModal(false);
+      setForm(emptyForm);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function updateStatus(id: string, status: string) {
@@ -219,9 +232,10 @@ export default function OrdensServico() {
                 )}
               </div>
             </div>
+            {error && <p className="mx-5 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
               <button onClick={() => setModal(false)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
-              <button onClick={save} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors">Criar OS</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">{saving ? 'Salvando...' : 'Criar OS'}</button>
             </div>
           </div>
         </div>

@@ -27,10 +27,13 @@ export async function POST(req: NextRequest) {
   } = body;
   
   const id = crypto.randomUUID();
+  const cid = customer_id || null;
+  const installments = card_installments ? parseInt(card_installments) : null;
+  const promised = promised_date || null;
 
   const rows = await sql`
     INSERT INTO service_orders (id, customer_id, guest_name, guest_phone, customer_contact, motorcycle, plate, description, total_value, promised_date, payment_method, card_installments)
-    VALUES (${id}, ${customer_id}, ${guest_name}, ${guest_phone}, ${customer_contact}, ${motorcycle}, ${plate}, ${description}, ${total_value}, ${promised_date}, ${payment_method}, ${card_installments})
+    VALUES (${id}, ${cid}, ${guest_name || null}, ${guest_phone || null}, ${customer_contact || null}, ${motorcycle || null}, ${plate || null}, ${description || null}, ${total_value}, ${promised}, ${payment_method}, ${installments})
     RETURNING *
   `;
   const order = rows[0];
