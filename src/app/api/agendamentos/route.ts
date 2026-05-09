@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     const rows = await sql`
       INSERT INTO appointments (id, customer_id, guest_name, guest_phone, motorcycle, plate, service, date, time)
-      VALUES (${id}, ${customer_id}, ${guest_name}, ${guest_phone}, ${motorcycle}, ${plate}, ${service}, ${date}, ${time})
+      VALUES (${id}, ${customer_id || null}, ${guest_name || null}, ${guest_phone || null}, ${motorcycle || null}, ${plate || null}, ${service || null}, ${date}, ${time})
       RETURNING *
     `;
     return NextResponse.json(rows[0], { status: 201 });

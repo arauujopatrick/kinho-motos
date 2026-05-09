@@ -16,6 +16,8 @@ export default function Orcamentos() {
   const [form, setForm] = useState({ customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', valid_until: '', items: [] as ServiceItem[] });
   const [itemDesc, setItemDesc] = useState('');
   const [itemPrice, setItemPrice] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -33,12 +35,23 @@ export default function Orcamentos() {
   }
 
   async function save() {
-    if (!form.valid_until) return;
-    const res = await fetch('/api/orcamentos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, total_value: total }) });
-    const created = await res.json();
-    setQuotes(prev => [{ ...created, items: form.items }, ...prev]);
-    setModal(false);
-    setForm({ customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', valid_until: '', items: [] });
+    if (!form.valid_until) { setError('Informe a validade'); return; }
+    if (form.items.length === 0) { setError('Adicione ao menos um item'); return; }
+    if (!form.customer_id && !form.guest_name) { setError('Selecione um cliente ou informe o nome'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch('/api/orcamentos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, total_value: total }) });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      setQuotes(prev => [{ ...created, items: form.items }, ...prev]);
+      setModal(false);
+      setForm({ customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', valid_until: '', items: [] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao salvar');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function updateStatus(id: string, status: string) {
@@ -137,9 +150,10 @@ export default function Orcamentos() {
                 {form.items.length > 0 && <p className="text-right text-sm font-semibold text-white mt-2">Total: R$ {total.toFixed(2)}</p>}
               </div>
             </div>
+            {error && <p className="mx-5 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
               <button onClick={() => setModal(false)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
-              <button onClick={save} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors">Salvar</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">{saving ? 'Salvando...' : 'Salvar'}</button>
             </div>
           </div>
         </div>

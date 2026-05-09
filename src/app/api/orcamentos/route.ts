@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const rows = await sql`
       INSERT INTO quotes (id, customer_id, guest_name, guest_phone, motorcycle, plate, description, total_value, valid_until)
-      VALUES (${id}, ${customer_id}, ${guest_name}, ${guest_phone}, ${motorcycle}, ${plate}, ${description}, ${total_value}, ${valid_until})
+      VALUES (${id}, ${customer_id || null}, ${guest_name || null}, ${guest_phone || null}, ${motorcycle || null}, ${plate || null}, ${description || null}, ${total_value}, ${valid_until || null})
       RETURNING *
     `;
     const quote = rows[0];
