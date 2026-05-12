@@ -1,5 +1,5 @@
 import type { PaymentMethod } from '@/types';
-import { formatPhone, normalizePlate } from '@/lib/customer-utils';
+import { formatPhone, isUuid, normalizePlate } from '@/lib/customer-utils';
 
 const PAYMENT_METHODS: PaymentMethod[] = ['Dinheiro', 'Pix', 'Cartão'];
 const CARD_INSTALLMENTS = ['À vista', '2x', '3x'] as const;
@@ -100,6 +100,10 @@ export function parseServiceOrderPayload(input: unknown): ValidationResult {
     return { success: false, message: 'Selecione um cliente ou informe o nome do cliente avulso.' };
   }
 
+  if (customerId && !isUuid(customerId)) {
+    return { success: false, message: 'Cliente inválido. Atualize a página e selecione o cliente novamente.' };
+  }
+
   if (!customerId && !isValidPhoneDigits(guestPhoneDigits)) {
     return { success: false, message: 'Informe um telefone válido para o cliente avulso.' };
   }
@@ -145,7 +149,7 @@ export function parseServiceOrderPayload(input: unknown): ValidationResult {
       }
 
       return {
-        id: typeof item.id === 'string' && item.id.trim() ? item.id : crypto.randomUUID(),
+        id: isUuid(item.id) ? item.id : crypto.randomUUID(),
         description: normalizedDescription,
         price,
       };

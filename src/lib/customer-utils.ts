@@ -1,4 +1,5 @@
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const NO_STORE_HEADERS = {
   'Cache-Control': 'no-store, max-age=0',
@@ -52,6 +53,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isValidPhoneDigits = (digits: string) =>
   digits.length === 10 || digits.length === 11;
+
+export const isUuid = (value: unknown): value is string =>
+  typeof value === 'string' && UUID_REGEX.test(value);
 
 export function formatPhone(value: string) {
   const digits = toDigits(value);

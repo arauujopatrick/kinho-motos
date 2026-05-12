@@ -1,5 +1,5 @@
 import { sql } from '@/lib/db';
-import { NO_STORE_HEADERS } from '@/lib/customer-utils';
+import { isUuid, NO_STORE_HEADERS } from '@/lib/customer-utils';
 import {
   getServiceOrderApiError,
   logServiceOrderApiError,
@@ -10,6 +10,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    if (!isUuid(id)) {
+      return NextResponse.json({ message: 'Identificador da OS inválido.' }, { status: 400, headers: NO_STORE_HEADERS });
+    }
+
     const body = await req.json();
     const isBodyRecord = typeof body === 'object' && body !== null;
 
@@ -95,7 +99,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const updatedItems = [];
     for (const item of items) {
-      const itemId = item.id || crypto.randomUUID();
+      const itemId = crypto.randomUUID();
       const itemRows = await sql`
         INSERT INTO service_order_items (id, service_order_id, description, price)
         VALUES (${itemId}, ${id}, ${item.description}, ${item.price})
@@ -115,6 +119,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    if (!isUuid(id)) {
+      return NextResponse.json({ message: 'Identificador da OS inválido.' }, { status: 400, headers: NO_STORE_HEADERS });
+    }
+
     const rows = await sql`DELETE FROM service_orders WHERE id = ${id} RETURNING id`;
 
     if (!rows[0]) {
