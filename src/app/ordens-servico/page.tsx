@@ -5,12 +5,99 @@ import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2 } from 'luc
 import type { ServiceOrder, Customer, ServiceItem } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatPhone, normalizePlate } from '@/lib/customer-utils';
 
 const SERVICES = ['Troca de Óleo', 'Revisão Geral', 'Pastilha de Freio', 'Pneu', 'Relação', 'Vela', 'Filtro de Ar', 'Corrente', 'Amortecedor', 'Elétrica'];
 const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Cartão'];
 const STATUS_OPTIONS = ['Aberto', 'Em andamento', 'Finalizado'];
 
 const emptyForm = { customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', description: '', promised_date: '', payment_method: 'Dinheiro', card_installments: '', items: [] as ServiceItem[] };
+
+type ApiErrorResponse = {
+  message?: string;
+  error?: string;
+};
+
+const normalizeDigits = (value: string) => value.replace(/\D/g, '');
+
+const isValidPhoneDigits = (value: string) =>
+  value.length === 10 || value.length === 11;
+
+const safeFormatDate = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+
+  return format(date, 'dd/MM/yyyy', { locale: ptBR });
+};
+
+const formatCurrency = (value: unknown) => {
+  const number = Number(value);
+  const safeNumber = Number.isFinite(number) ? number : 0;
+  return `R$ ${safeNumber.toFixed(2).replace('.', ',')}`;
+};
+
+async function getResponseMessage(response: Response, fallbackMessage: string) {
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      const data = (await response.json()) as ApiErrorResponse;
+      if (typeof data.message === 'string' && data.message.trim()) {
+        return data.message;
+      }
+      if (typeof data.error === 'string' && data.error.trim()) {
+        return data.error;
+      }
+    } catch {
+      // Ignore parse errors and fall back to plain text.
+    }
+  }
+
+  try {
+    const text = await response.text();
+    if (text.trim()) {
+      return text;
+    }
+  } catch {
+    // Ignore parse errors and use fallback.
+  }
+
+  return fallbackMessage;
+}
+
+async function fetchOrdersFromApi() {
+  const response = await fetch('/api/ordens-servico', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(await getResponseMessage(response, 'Não foi possível carregar as ordens de serviço agora.'));
+  }
+
+  const data = await response.json();
+  if (!Array.isArray(data)) {
+    throw new Error('A API de ordens de serviço retornou um formato inválido.');
+  }
+
+  return data as ServiceOrder[];
+}
+
+async function fetchCustomersFromApi() {
+  const response = await fetch('/api/clientes', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(await getResponseMessage(response, 'Não foi possível carregar os clientes agora.'));
+  }
+
+  const data = await response.json();
+  if (!Array.isArray(data)) {
+    throw new Error('A API de clientes retornou um formato inválido.');
+  }
+
+  return data as Customer[];
+}
 
 export default function OrdensServico() {
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
@@ -24,17 +111,46 @@ export default function OrdensServico() {
   const [itemPrice, setItemPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [loadingData, setLoadingData] = useState(true);
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/ordens-servico').then(r => r.json()),
-      fetch('/api/clientes').then(r => r.json()),
-    ]).then(([o, c]) => { setOrders(o); setCustomers(c); });
+    let isMounted = true;
+
+    void Promise.all([fetchOrdersFromApi(), fetchCustomersFromApi()])
+      .then(([loadedOrders, loadedCustomers]) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setOrders(loadedOrders);
+        setCustomers(loadedCustomers);
+        setPageError('');
+      })
+      .catch((loadError) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setPageError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar os dados de ordens de serviço agora.');
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoadingData(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const filtered = orders.filter(o => {
-    const matchSearch = (o.guest_name || o.customer_name || '').toLowerCase().includes(search.toLowerCase()) || (o.plate || '').toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'Todos' || o.status === filterStatus;
+  const filtered = orders.filter((order) => {
+    const name = order.guest_name || order.customer_name || '';
+    const plate = order.plate || '';
+    const status = order.status || 'Aberto';
+    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || plate.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filterStatus === 'Todos' || status === filterStatus;
     return matchSearch && matchStatus;
   });
 
@@ -50,75 +166,183 @@ export default function OrdensServico() {
   const cardFee = form.payment_method === 'Cartão' ? 3 : 0;
   const total = subtotal + cardFee;
 
+  async function refreshOrders(showLoader = false) {
+    if (showLoader) {
+      setLoadingData(true);
+    }
+
+    try {
+      const latestOrders = await fetchOrdersFromApi();
+      setOrders(latestOrders);
+      setPageError('');
+      return latestOrders;
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : 'Não foi possível carregar as ordens de serviço agora.';
+      setPageError(message);
+      throw loadError;
+    } finally {
+      if (showLoader) {
+        setLoadingData(false);
+      }
+    }
+  }
+
   async function save() {
-    if (!form.promised_date) { setError('Informe a data de entrega'); return; }
-    if (form.items.length === 0) { setError('Adicione ao menos um serviço/peça'); return; }
-    if (!form.customer_id && !form.guest_name) { setError('Selecione um cliente ou informe o nome'); return; }
+    const customer = customers.find((item) => item.id === form.customer_id);
+    const guestPhoneDigits = normalizeDigits(form.guest_phone);
+    const motorcycle = (form.motorcycle || customer?.motorcycle || '').trim();
+    const plate = normalizePlate(form.plate || customer?.plate || '') || '';
+
+    if (!form.customer_id && !form.guest_name.trim()) {
+      setError('Selecione um cliente ou informe o nome do cliente avulso.');
+      return;
+    }
+
+    if (!form.customer_id && !isValidPhoneDigits(guestPhoneDigits)) {
+      setError('Informe um telefone válido para o cliente avulso.');
+      return;
+    }
+
+    if (!motorcycle) {
+      setError('Informe a moto desta ordem de serviço.');
+      return;
+    }
+
+    if (!form.promised_date) {
+      setError('Informe a data de entrega da OS.');
+      return;
+    }
+
+    if (form.items.length === 0) {
+      setError('Adicione pelo menos um item à OS.');
+      return;
+    }
+
     setSaving(true);
     setError('');
+
+    const body = {
+      ...form,
+      guest_name: form.guest_name.trim(),
+      guest_phone: guestPhoneDigits ? formatPhone(guestPhoneDigits) : '',
+      motorcycle,
+      plate,
+      total_value: total,
+      customer_contact: customer ? (customer.whatsapp || customer.phone) : formatPhone(guestPhoneDigits),
+    };
+    const url = editingId ? `/api/ordens-servico/${editingId}` : '/api/ordens-servico';
+    const method = editingId ? 'PUT' : 'POST';
+    const fallbackMessage = editingId
+      ? 'Não foi possível atualizar a ordem de serviço agora.'
+      : 'Não foi possível cadastrar a ordem de serviço agora.';
+
     try {
-      const customer = customers.find(c => c.id === form.customer_id);
-      const body = { ...form, total_value: total, customer_contact: customer ? (customer.whatsapp || customer.phone) : form.guest_phone, motorcycle: form.motorcycle || customer?.motorcycle || '', plate: form.plate || customer?.plate || '' };
-      const url = editingId ? `/api/ordens-servico/${editingId}` : '/api/ordens-servico';
-      const method = editingId ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (!res.ok) throw new Error(await res.text());
-      const saved = await res.json();
-      if (editingId) {
-        setOrders(prev => prev.map(o => o.id === editingId ? { ...o, ...saved } : o));
-      } else {
-        setOrders(prev => [saved, ...prev]);
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getResponseMessage(response, fallbackMessage));
       }
+
+      const saved = (await response.json()) as ServiceOrder;
+      setOrders((currentOrders) =>
+        editingId
+          ? currentOrders.map((order) => order.id === editingId ? { ...order, ...saved } : order)
+          : [saved, ...currentOrders]
+      );
       setModal(false);
       setEditingId(null);
       setForm(emptyForm);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao salvar');
+      setItemDesc('');
+      setItemPrice('');
+
+      void refreshOrders().catch(() => {
+        setPageError('OS salva, mas não foi possível atualizar a listagem agora.');
+      });
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : fallbackMessage);
     } finally {
       setSaving(false);
     }
   }
 
-  function openEdit(o: ServiceOrder) {
-    setEditingId(o.id);
+  function openEdit(order: ServiceOrder) {
+    setEditingId(order.id);
     setForm({
-      customer_id: o.customer_id || '',
-      guest_name: o.guest_name || '',
-      guest_phone: o.guest_phone || '',
-      motorcycle: o.motorcycle || '',
-      plate: o.plate || '',
-      description: o.description || '',
-      promised_date: o.promised_date ? String(o.promised_date).slice(0, 10) : '',
-      payment_method: o.payment_method || 'Dinheiro',
-      card_installments: o.card_installments ? String(o.card_installments) : '',
-      items: o.items || [],
+      customer_id: order.customer_id || '',
+      guest_name: order.guest_name || '',
+      guest_phone: order.guest_phone || '',
+      motorcycle: order.motorcycle || '',
+      plate: order.plate || '',
+      description: order.description || '',
+      promised_date: order.promised_date ? String(order.promised_date).slice(0, 10) : '',
+      payment_method: order.payment_method || 'Dinheiro',
+      card_installments: order.card_installments ? String(order.card_installments) : '',
+      items: Array.isArray(order.items) ? order.items : [],
     });
+    setItemDesc('');
+    setItemPrice('');
     setError('');
     setModal(true);
   }
 
   async function removeOrder(id: string) {
-    if (!confirm('Excluir esta OS?')) return;
-    const res = await fetch(`/api/ordens-servico/${id}`, { method: 'DELETE' });
-    if (res.ok) setOrders(prev => prev.filter(o => o.id !== id));
+    if (!confirm('Excluir esta OS?')) {
+      return;
+    }
+
+    setPageError('');
+
+    try {
+      const response = await fetch(`/api/ordens-servico/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        throw new Error(await getResponseMessage(response, 'Não foi possível excluir esta OS.'));
+      }
+
+      setOrders((currentOrders) => currentOrders.filter((order) => order.id !== id));
+    } catch (removeError) {
+      setPageError(removeError instanceof Error ? removeError.message : 'Não foi possível excluir esta OS.');
+    }
   }
 
   async function updateStatus(id: string, status: string) {
-    const res = await fetch(`/api/ordens-servico/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-    const updated = await res.json();
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updated } : o));
+    setPageError('');
 
-    if (status === 'Finalizado') {
-      const order = orders.find(o => o.id === id);
-      if (order) {
-        await fetch('/api/financeiro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: `OS - ${order.motorcycle} ${order.plate || ''}`.trim(), type: 'INCOME', value: order.total_value, payment_method: order.payment_method, source_id: id, date: new Date().toISOString() }) });
+    try {
+      const response = await fetch(`/api/ordens-servico/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getResponseMessage(response, 'Não foi possível atualizar o status desta OS.'));
       }
+
+      const updated = (await response.json()) as ServiceOrder;
+      setOrders((currentOrders) => currentOrders.map((order) => order.id === id ? { ...order, ...updated } : order));
+
+      if (status === 'Finalizado') {
+        const order = orders.find((item) => item.id === id);
+        if (order) {
+          await fetch('/api/financeiro', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: `OS - ${order.motorcycle} ${order.plate || ''}`.trim(), type: 'INCOME', value: order.total_value, payment_method: order.payment_method, source_id: id, date: new Date().toISOString() }),
+          });
+        }
+      }
+    } catch (statusError) {
+      setPageError(statusError instanceof Error ? statusError.message : 'Não foi possível atualizar o status desta OS.');
     }
   }
 
   function whatsapp(o: ServiceOrder) {
     const contact = o.customer_contact || o.guest_phone || '';
-    const msg = encodeURIComponent(`Olá! Sua moto ${o.motorcycle} está pronta para retirada. Valor: R$ ${Number(o.total_value).toFixed(2).replace('.', ',')}`);
+    const msg = encodeURIComponent(`Olá! Sua moto ${o.motorcycle || ''} está pronta para retirada. Valor: ${formatCurrency(o.total_value)}`);
     window.open(`https://wa.me/55${contact.replace(/\D/g, '')}?text=${msg}`, '_blank');
   }
 
@@ -129,12 +353,23 @@ export default function OrdensServico() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Ordens de Serviço</h1>
-          <p className="text-zinc-400 text-sm mt-1">{orders.filter(o => o.status !== 'Finalizado').length} OS abertas</p>
+          <p className="text-zinc-400 text-sm mt-1">
+            {loadingData ? 'Carregando ordens de serviço...' : `${orders.filter((order) => (order.status || 'Aberto') !== 'Finalizado').length} OS abertas`}
+          </p>
         </div>
-        <button onClick={() => { setEditingId(null); setForm(emptyForm); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button onClick={() => { setEditingId(null); setForm(emptyForm); setItemDesc(''); setItemPrice(''); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Nova OS
         </button>
       </div>
+
+      {pageError && (
+        <div className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 text-red-300 text-sm px-4 py-3 rounded-lg">
+          <span>{pageError}</span>
+          <button onClick={() => void refreshOrders(true)} className="text-xs font-medium text-red-200 hover:text-white transition-colors">
+            Tentar novamente
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-3">
         <div className="relative flex-1">
@@ -148,49 +383,55 @@ export default function OrdensServico() {
       </div>
 
       <div className="grid gap-4">
-        {filtered.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS encontrada</p>}
-        {filtered.map(o => (
-          <div key={o.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
+        {loadingData && orders.length === 0 && <p className="text-center text-zinc-500 py-10">Carregando ordens de serviço...</p>}
+        {!loadingData && filtered.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS encontrada</p>}
+        {filtered.map((order) => {
+          const status = order.status || 'Aberto';
+          const items = Array.isArray(order.items) ? order.items : [];
+
+          return (
+          <div key={order.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[o.status]}`}>{o.status}</span>
-                  <span className="text-zinc-500 text-xs">Entrega: {o.promised_date ? format(new Date(o.promised_date), 'dd/MM/yyyy', { locale: ptBR }) : '—'}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[status] || 'bg-zinc-700 text-zinc-300'}`}>{status}</span>
+                  <span className="text-zinc-500 text-xs">Entrega: {safeFormatDate(order.promised_date)}</span>
                 </div>
-                <p className="text-white font-semibold">{o.guest_name || o.customer_name || '—'}</p>
-                <p className="text-zinc-400 text-sm">{o.motorcycle} {o.plate ? `• ${o.plate}` : ''}</p>
-                {o.items && o.items.length > 0 && (
-                  <ul className="mt-2 space-y-1">{o.items.map(i => <li key={i.id} className="text-zinc-400 text-xs">• {i.description} — R$ {Number(i.price).toFixed(2)}</li>)}</ul>
+                <p className="text-white font-semibold">{order.guest_name || order.customer_name || '—'}</p>
+                <p className="text-zinc-400 text-sm">{order.motorcycle || '—'} {order.plate ? `• ${order.plate}` : ''}</p>
+                {items.length > 0 && (
+                  <ul className="mt-2 space-y-1">{items.map((item) => <li key={item.id} className="text-zinc-400 text-xs">• {item.description} — {formatCurrency(item.price)}</li>)}</ul>
                 )}
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-xl font-bold text-white">R$ {Number(o.total_value).toFixed(2).replace('.', ',')}</p>
-                <p className="text-zinc-500 text-xs">{o.payment_method}</p>
+                <p className="text-xl font-bold text-white">{formatCurrency(order.total_value)}</p>
+                <p className="text-zinc-500 text-xs">{order.payment_method || '—'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-zinc-800">
-              <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)} className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500">
+              <select value={status} onChange={e => updateStatus(order.id, e.target.value)} className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500">
                 {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
               </select>
-              {o.status === 'Finalizado' && (
-                <button onClick={() => whatsapp(o)} className="flex items-center gap-1.5 text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">
+              {status === 'Finalizado' && (
+                <button onClick={() => whatsapp(order)} className="flex items-center gap-1.5 text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">
                   <MessageCircle size={14} /> WhatsApp
                 </button>
               )}
-              {o.status !== 'Finalizado' && (
-                <button onClick={() => updateStatus(o.id, 'Finalizado')} className="flex items-center gap-1.5 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg transition-colors">
+              {status !== 'Finalizado' && (
+                <button onClick={() => updateStatus(order.id, 'Finalizado')} className="flex items-center gap-1.5 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg transition-colors">
                   <CheckCircle size={14} /> Finalizar
                 </button>
               )}
-              <button onClick={() => openEdit(o)} className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white px-3 py-1.5 rounded-lg transition-colors ml-auto">
+              <button onClick={() => openEdit(order)} className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white px-3 py-1.5 rounded-lg transition-colors ml-auto">
                 <Pencil size={14} /> Editar
               </button>
-              <button onClick={() => removeOrder(o.id)} className="flex items-center gap-1.5 text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-colors">
+              <button onClick={() => removeOrder(order.id)} className="flex items-center gap-1.5 text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-colors">
                 <Trash2 size={14} /> Excluir
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {modal && (
@@ -198,7 +439,7 @@ export default function OrdensServico() {
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-zinc-800 sticky top-0 bg-zinc-900">
               <h2 className="font-semibold text-white">{editingId ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço'}</h2>
-              <button onClick={() => { setModal(false); setEditingId(null); }} className="text-zinc-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => { setModal(false); setEditingId(null); setError(''); }} className="text-zinc-400 hover:text-white"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-4">
               <div>
@@ -272,8 +513,10 @@ export default function OrdensServico() {
             </div>
             {error && <p className="mx-5 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">
-              <button onClick={() => { setModal(false); setEditingId(null); }} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">{saving ? 'Salvando...' : (editingId ? 'Salvar' : 'Criar OS')}</button>
+              <button onClick={() => { setModal(false); setEditingId(null); setError(''); }} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition-colors">Cancelar</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm bg-orange-500 hover:bg-orange-600 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors">
+                {saving ? 'Salvando...' : (editingId ? 'Salvar' : 'Criar OS')}
+              </button>
             </div>
           </div>
         </div>
