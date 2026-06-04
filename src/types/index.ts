@@ -64,7 +64,7 @@ export interface ServiceOrder {
   delivery_date?: string;
   status: OSStatus;
   payment_method: PaymentMethod;
-  card_installments?: 'À vista' | '2x' | '3x';
+  card_installments?: number | null;
   items?: ServiceItem[];
   customer?: Customer;
 }

@@ -2,7 +2,6 @@ import type { PaymentMethod } from '@/types';
 import { formatPhone, isUuid, normalizePlate } from '@/lib/customer-utils';
 
 const PAYMENT_METHODS: PaymentMethod[] = ['Dinheiro', 'Pix', 'Cartão'];
-const CARD_INSTALLMENTS = ['À vista', '2x', '3x'] as const;
 
 type ServiceOrderItemInput = {
   id: string;
@@ -22,7 +21,7 @@ export type ServiceOrderPayload = {
   entry_date: string;
   promised_date: string;
   payment_method: PaymentMethod;
-  card_installments: (typeof CARD_INSTALLMENTS)[number] | null;
+  card_installments: number | null;
   items: ServiceOrderItemInput[];
 };
 
@@ -76,9 +75,6 @@ const normalizeCustomerId = (value: unknown) => {
 const isPaymentMethod = (value: string): value is PaymentMethod =>
   PAYMENT_METHODS.includes(value as PaymentMethod);
 
-const isCardInstallment = (value: string): value is (typeof CARD_INSTALLMENTS)[number] =>
-  CARD_INSTALLMENTS.includes(value as (typeof CARD_INSTALLMENTS)[number]);
-
 export function parseServiceOrderPayload(input: unknown): ValidationResult {
   if (!isRecord(input)) {
     return { success: false, message: 'Dados da OS inválidos.' };
@@ -91,7 +87,9 @@ export function parseServiceOrderPayload(input: unknown): ValidationResult {
   const motorcycle = normalizeOptionalText(input.motorcycle, 120);
   const plate = normalizePlate(input.plate);
   const paymentMethod = typeof input.payment_method === 'string' ? input.payment_method : '';
-  const rawInstallments = typeof input.card_installments === 'string' ? input.card_installments.trim() : '';
+  const rawInstallments = typeof input.card_installments === 'string' || typeof input.card_installments === 'number'
+    ? String(input.card_installments).trim()
+    : '';
   const promisedDateRaw = typeof input.promised_date === 'string' ? input.promised_date : '';
   const totalValue = Number(input.total_value ?? 0);
   const description = normalizeOptionalText(input.description, 500);
@@ -160,9 +158,10 @@ export function parseServiceOrderPayload(input: unknown): ValidationResult {
     return { success: false, message: 'Adicione pelo menos um item à ordem de serviço.' };
   }
 
+  const parsedInstallments = rawInstallments ? Number.parseInt(rawInstallments, 10) : null;
   const cardInstallments =
-    paymentMethod === 'Cartão'
-      ? (isCardInstallment(rawInstallments) ? rawInstallments : 'À vista')
+    paymentMethod === 'Cartão' && parsedInstallments && Number.isFinite(parsedInstallments)
+      ? parsedInstallments
       : null;
 
   return {

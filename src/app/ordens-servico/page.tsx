@@ -42,6 +42,27 @@ const formatCurrency = (value: unknown) => {
   return `R$ ${safeNumber.toFixed(2).replace('.', ',')}`;
 };
 
+const toMoneyNumber = (value: unknown) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const normalizeServiceItems = (items: unknown): ServiceItem[] => {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .filter((item): item is Partial<ServiceItem> => typeof item === 'object' && item !== null)
+    .map((item) => ({
+      id: typeof item.id === 'string' && item.id ? item.id : crypto.randomUUID(),
+      service_order_id: typeof item.service_order_id === 'string' ? item.service_order_id : undefined,
+      quote_id: typeof item.quote_id === 'string' ? item.quote_id : undefined,
+      description: typeof item.description === 'string' && item.description.trim() ? item.description : 'Item sem descrição',
+      price: toMoneyNumber(item.price),
+    }));
+};
+
 async function getResponseMessage(response: Response, fallbackMessage: string) {
   const contentType = response.headers.get('content-type') ?? '';
 
@@ -117,33 +138,81 @@ export default function OrdensServico() {
   useEffect(() => {
     let isMounted = true;
 
-    void Promise.all([fetchOrdersFromApi(), fetchCustomersFromApi()])
-      .then(([loadedOrders, loadedCustomers]) => {
-        if (!isMounted) {
-          return;
-        }
+    async function loadInitialData() {
+      setLoadingData(true);
 
-        setOrders(loadedOrders);
-        setCustomers(loadedCustomers);
-        setPageError('');
-      })
-      .catch((loadError) => {
-        if (!isMounted) {
-          return;
-        }
+      const [ordersResult, customersResult] = await Promise.allSettled([
+        fetchOrdersFromApi(),
+        fetchCustomersFromApi(),
+      ]);
 
-        setPageError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar os dados de ordens de serviço agora.');
-      })
-      .finally(() => {
-        if (isMounted) {
-          setLoadingData(false);
-        }
-      });
+      if (!isMounted) {
+        return;
+      }
+
+      if (ordersResult.status === 'fulfilled') {
+        setOrders(ordersResult.value);
+      } else {
+        setOrders([]);
+      }
+
+      if (customersResult.status === 'fulfilled') {
+        setCustomers(customersResult.value);
+      } else {
+        setCustomers([]);
+      }
+
+      const messages = [];
+      if (ordersResult.status === 'rejected') {
+        messages.push(ordersResult.reason instanceof Error ? ordersResult.reason.message : 'Não foi possível carregar as ordens de serviço agora.');
+      }
+      if (customersResult.status === 'rejected') {
+        messages.push(customersResult.reason instanceof Error ? customersResult.reason.message : 'Não foi possível carregar os clientes agora.');
+      }
+
+      setPageError(messages.join(' '));
+      setLoadingData(false);
+    }
+
+    void loadInitialData();
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  async function refreshAllData(showLoader = false) {
+    if (showLoader) {
+      setLoadingData(true);
+    }
+
+    const [ordersResult, customersResult] = await Promise.allSettled([
+      fetchOrdersFromApi(),
+      fetchCustomersFromApi(),
+    ]);
+
+    if (ordersResult.status === 'fulfilled') {
+      setOrders(ordersResult.value);
+    }
+
+    if (customersResult.status === 'fulfilled') {
+      setCustomers(customersResult.value);
+    }
+
+    const messages = [];
+    if (ordersResult.status === 'rejected') {
+      messages.push(ordersResult.reason instanceof Error ? ordersResult.reason.message : 'Não foi possível carregar as ordens de serviço agora.');
+    }
+    if (customersResult.status === 'rejected') {
+      messages.push(customersResult.reason instanceof Error ? customersResult.reason.message : 'Não foi possível carregar os clientes agora.');
+    }
+
+    setPageError(messages.join(' '));
+
+    if (showLoader) {
+      setLoadingData(false);
+    }
+  }
 
   const filtered = orders.filter((order) => {
     const name = order.guest_name || order.customer_name || '';
@@ -156,13 +225,13 @@ export default function OrdensServico() {
 
   function addItem() {
     if (!itemDesc || !itemPrice) return;
-    setForm(f => ({ ...f, items: [...f.items, { id: crypto.randomUUID(), description: itemDesc, price: parseFloat(itemPrice) }] }));
+    setForm(f => ({ ...f, items: [...f.items, { id: crypto.randomUUID(), description: itemDesc, price: toMoneyNumber(itemPrice) }] }));
     setItemDesc(''); setItemPrice('');
   }
 
   function removeItem(id: string) { setForm(f => ({ ...f, items: f.items.filter(i => i.id !== id) })); }
 
-  const subtotal = form.items.reduce((s, i) => s + i.price, 0);
+  const subtotal = form.items.reduce((s, i) => s + toMoneyNumber(i.price), 0);
   const cardFee = form.payment_method === 'Cartão' ? 3 : 0;
   const total = subtotal + cardFee;
 
@@ -281,7 +350,7 @@ export default function OrdensServico() {
       promised_date: order.promised_date ? String(order.promised_date).slice(0, 10) : '',
       payment_method: order.payment_method || 'Dinheiro',
       card_installments: order.card_installments ? String(order.card_installments) : '',
-      items: Array.isArray(order.items) ? order.items : [],
+      items: normalizeServiceItems(order.items),
     });
     setItemDesc('');
     setItemPrice('');
@@ -365,7 +434,7 @@ export default function OrdensServico() {
       {pageError && (
         <div className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 text-red-300 text-sm px-4 py-3 rounded-lg">
           <span>{pageError}</span>
-          <button onClick={() => void refreshOrders(true)} className="text-xs font-medium text-red-200 hover:text-white transition-colors">
+          <button onClick={() => void refreshAllData(true)} className="text-xs font-medium text-red-200 hover:text-white transition-colors">
             Tentar novamente
           </button>
         </div>
@@ -387,7 +456,7 @@ export default function OrdensServico() {
         {!loadingData && filtered.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS encontrada</p>}
         {filtered.map((order) => {
           const status = order.status || 'Aberto';
-          const items = Array.isArray(order.items) ? order.items : [];
+          const items = normalizeServiceItems(order.items);
 
           return (
           <div key={order.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
@@ -489,7 +558,7 @@ export default function OrdensServico() {
                       <li key={i.id} className="flex items-center justify-between bg-zinc-800 rounded-lg px-3 py-2 text-sm">
                         <span className="text-zinc-200">{i.description}</span>
                         <div className="flex items-center gap-3">
-                          <span className="text-white font-medium">R$ {i.price.toFixed(2)}</span>
+                          <span className="text-white font-medium">{formatCurrency(i.price)}</span>
                           <button onClick={() => removeItem(i.id)} className="text-zinc-500 hover:text-red-400"><X size={14} /></button>
                         </div>
                       </li>
