@@ -23,6 +23,25 @@ const normalizeDigits = (value: string) => value.replace(/\D/g, '');
 const isValidPhoneDigits = (value: string) =>
   value.length === 10 || value.length === 11;
 
+const safeFormatDate = (value?: string | null) => {
+  if (!value) {
+    return '—';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+
+  return format(date, 'dd/MM/yyyy', { locale: ptBR });
+};
+
+const formatCurrency = (value: unknown) => {
+  const number = Number(value);
+  const safeNumber = Number.isFinite(number) ? number : 0;
+  return `R$ ${safeNumber.toFixed(2).replace('.', ',')}`;
+};
+
 async function getResponseMessage(response: Response, fallbackMessage: string) {
   const contentType = response.headers.get('content-type') ?? '';
 
@@ -58,7 +77,12 @@ async function fetchOrdersFromApi() {
     throw new Error(await getResponseMessage(response, 'Não foi possível carregar as ordens de serviço agora.'));
   }
 
-  return (await response.json()) as ServiceOrder[];
+  const data = await response.json();
+  if (!Array.isArray(data)) {
+    throw new Error('A API de ordens de serviço retornou um formato inválido.');
+  }
+
+  return data as ServiceOrder[];
 }
 
 async function fetchCustomersFromApi() {
@@ -67,7 +91,12 @@ async function fetchCustomersFromApi() {
     throw new Error(await getResponseMessage(response, 'Não foi possível carregar os clientes agora.'));
   }
 
-  return (await response.json()) as Customer[];
+  const data = await response.json();
+  if (!Array.isArray(data)) {
+    throw new Error('A API de clientes retornou um formato inválido.');
+  }
+
+  return data as Customer[];
 }
 
 export default function OrdensServico() {
@@ -115,9 +144,12 @@ export default function OrdensServico() {
     };
   }, []);
 
-  const filtered = orders.filter(o => {
-    const matchSearch = (o.guest_name || o.customer_name || '').toLowerCase().includes(search.toLowerCase()) || (o.plate || '').toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'Todos' || o.status === filterStatus;
+  const filtered = orders.filter((order) => {
+    const name = order.guest_name || order.customer_name || '';
+    const plate = order.plate || '';
+    const status = order.status || 'Aberto';
+    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || plate.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filterStatus === 'Todos' || status === filterStatus;
     return matchSearch && matchStatus;
   });
 
@@ -260,7 +292,7 @@ export default function OrdensServico() {
 
   function whatsapp(o: ServiceOrder) {
     const contact = o.customer_contact || o.guest_phone || '';
-    const msg = encodeURIComponent(`Olá! Sua moto ${o.motorcycle} está pronta para retirada. Valor: R$ ${Number(o.total_value).toFixed(2).replace('.', ',')}`);
+    const msg = encodeURIComponent(`Olá! Sua moto ${o.motorcycle || ''} está pronta para retirada. Valor: ${formatCurrency(o.total_value)}`);
     window.open(`https://wa.me/55${contact.replace(/\D/g, '')}?text=${msg}`, '_blank');
   }
 
@@ -272,7 +304,7 @@ export default function OrdensServico() {
         <div>
           <h1 className="text-2xl font-bold text-white">Ordens de Serviço</h1>
           <p className="text-zinc-400 text-sm mt-1">
-            {loadingData ? 'Carregando ordens de serviço...' : `${orders.filter(o => o.status !== 'Finalizado').length} OS abertas`}
+            {loadingData ? 'Carregando ordens de serviço...' : `${orders.filter((order) => (order.status || 'Aberto') !== 'Finalizado').length} OS abertas`}
           </p>
         </div>
         <button onClick={() => { setForm(emptyForm); setItemDesc(''); setItemPrice(''); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
@@ -303,42 +335,47 @@ export default function OrdensServico() {
       <div className="grid gap-4">
         {loadingData && orders.length === 0 && <p className="text-center text-zinc-500 py-10">Carregando ordens de serviço...</p>}
         {!loadingData && filtered.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS encontrada</p>}
-        {filtered.map(o => (
-          <div key={o.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
+        {filtered.map((order) => {
+          const status = order.status || 'Aberto';
+          const items = Array.isArray(order.items) ? order.items : [];
+
+          return (
+          <div key={order.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[o.status]}`}>{o.status}</span>
-                  <span className="text-zinc-500 text-xs">Entrega: {o.promised_date ? format(new Date(o.promised_date), 'dd/MM/yyyy', { locale: ptBR }) : '—'}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[status] || 'bg-zinc-700 text-zinc-300'}`}>{status}</span>
+                  <span className="text-zinc-500 text-xs">Entrega: {safeFormatDate(order.promised_date)}</span>
                 </div>
-                <p className="text-white font-semibold">{o.guest_name || o.customer_name || '—'}</p>
-                <p className="text-zinc-400 text-sm">{o.motorcycle} {o.plate ? `• ${o.plate}` : ''}</p>
-                {o.items && o.items.length > 0 && (
-                  <ul className="mt-2 space-y-1">{o.items.map(i => <li key={i.id} className="text-zinc-400 text-xs">• {i.description} — R$ {Number(i.price).toFixed(2)}</li>)}</ul>
+                <p className="text-white font-semibold">{order.guest_name || order.customer_name || '—'}</p>
+                <p className="text-zinc-400 text-sm">{order.motorcycle || '—'} {order.plate ? `• ${order.plate}` : ''}</p>
+                {items.length > 0 && (
+                  <ul className="mt-2 space-y-1">{items.map((item) => <li key={item.id} className="text-zinc-400 text-xs">• {item.description} — {formatCurrency(item.price)}</li>)}</ul>
                 )}
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-xl font-bold text-white">R$ {Number(o.total_value).toFixed(2).replace('.', ',')}</p>
-                <p className="text-zinc-500 text-xs">{o.payment_method}</p>
+                <p className="text-xl font-bold text-white">{formatCurrency(order.total_value)}</p>
+                <p className="text-zinc-500 text-xs">{order.payment_method || '—'}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-zinc-800">
-              <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)} className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500">
+              <select value={status} onChange={e => updateStatus(order.id, e.target.value)} className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-orange-500">
                 {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
               </select>
-              {o.status === 'Finalizado' && (
-                <button onClick={() => whatsapp(o)} className="flex items-center gap-1.5 text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">
+              {status === 'Finalizado' && (
+                <button onClick={() => whatsapp(order)} className="flex items-center gap-1.5 text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">
                   <MessageCircle size={14} /> WhatsApp
                 </button>
               )}
-              {o.status !== 'Finalizado' && (
-                <button onClick={() => updateStatus(o.id, 'Finalizado')} className="flex items-center gap-1.5 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg transition-colors">
+              {status !== 'Finalizado' && (
+                <button onClick={() => updateStatus(order.id, 'Finalizado')} className="flex items-center gap-1.5 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg transition-colors">
                   <CheckCircle size={14} /> Finalizar
                 </button>
               )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {modal && (
