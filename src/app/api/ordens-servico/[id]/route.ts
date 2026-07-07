@@ -7,6 +7,33 @@ import {
 } from '@/lib/service-order-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    if (!isUuid(id)) {
+      return NextResponse.json({ message: 'Identificador da OS inválido.' }, { status: 400, headers: NO_STORE_HEADERS });
+    }
+
+    const rows = await sql`
+      SELECT os.*, c.name as customer_name
+      FROM service_orders os
+      LEFT JOIN customers c ON c.id = os.customer_id
+      WHERE os.id = ${id}
+    `;
+
+    if (!rows[0]) {
+      return NextResponse.json({ message: 'Ordem de serviço não encontrada.' }, { status: 404, headers: NO_STORE_HEADERS });
+    }
+
+    const items = await sql`SELECT * FROM service_order_items WHERE service_order_id = ${id}`;
+    return NextResponse.json({ ...rows[0], items }, { headers: NO_STORE_HEADERS });
+  } catch (error: unknown) {
+    logServiceOrderApiError('buscar', error);
+    const apiError = getServiceOrderApiError(error, 'Erro ao buscar ordem de serviço no banco.');
+    return NextResponse.json({ message: apiError.message }, { status: apiError.status, headers: NO_STORE_HEADERS });
+  }
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -59,6 +86,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       plate,
       description,
       total_value,
+      discount,
       promised_date,
       payment_method,
       card_installments,
@@ -79,6 +107,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         plate = ${plate},
         description = ${description},
         total_value = ${total_value},
+        discount = ${discount},
         promised_date = ${promised_date},
         payment_method = ${payment_method},
         card_installments = ${card_installments},

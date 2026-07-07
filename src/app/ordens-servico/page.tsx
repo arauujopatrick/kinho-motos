@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2, Printer } from 'lucide-react';
 import type { ServiceOrder, Customer, ServiceItem } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -11,7 +11,7 @@ const SERVICES = ['Troca de Óleo', 'Revisão Geral', 'Pastilha de Freio', 'Pneu
 const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Cartão'];
 const STATUS_OPTIONS = ['Aberto', 'Em andamento', 'Finalizado'];
 
-const emptyForm = { customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', description: '', promised_date: '', payment_method: 'Dinheiro', card_installments: '', items: [] as ServiceItem[] };
+const emptyForm = { customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', description: '', promised_date: '', payment_method: 'Dinheiro', card_installments: '', discount: '', items: [] as ServiceItem[] };
 
 type ApiErrorResponse = {
   message?: string;
@@ -233,7 +233,8 @@ export default function OrdensServico() {
 
   const subtotal = form.items.reduce((s, i) => s + toMoneyNumber(i.price), 0);
   const cardFee = form.payment_method === 'Cartão' ? 3 : 0;
-  const total = subtotal + cardFee;
+  const discountValue = Math.min(toMoneyNumber(form.discount), subtotal + cardFee);
+  const total = Math.max(subtotal + cardFee - discountValue, 0);
 
   async function refreshOrders(showLoader = false) {
     if (showLoader) {
@@ -297,6 +298,7 @@ export default function OrdensServico() {
       motorcycle,
       plate,
       total_value: total,
+      discount: discountValue,
       customer_contact: customer ? (customer.whatsapp || customer.phone) : formatPhone(guestPhoneDigits),
     };
     const url = editingId ? `/api/ordens-servico/${editingId}` : '/api/ordens-servico';
@@ -350,6 +352,7 @@ export default function OrdensServico() {
       promised_date: order.promised_date ? String(order.promised_date).slice(0, 10) : '',
       payment_method: order.payment_method || 'Dinheiro',
       card_installments: order.card_installments ? String(order.card_installments) : '',
+      discount: order.discount ? String(order.discount) : '',
       items: normalizeServiceItems(order.items),
     });
     setItemDesc('');
@@ -491,7 +494,10 @@ export default function OrdensServico() {
                   <CheckCircle size={14} /> Finalizar
                 </button>
               )}
-              <button onClick={() => openEdit(order)} className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white px-3 py-1.5 rounded-lg transition-colors ml-auto">
+              <a href={`/ordens-servico/${order.id}/imprimir`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white px-3 py-1.5 rounded-lg transition-colors ml-auto">
+                <Printer size={14} /> Imprimir
+              </a>
+              <button onClick={() => openEdit(order)} className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white px-3 py-1.5 rounded-lg transition-colors">
                 <Pencil size={14} /> Editar
               </button>
               <button onClick={() => removeOrder(order.id)} className="flex items-center gap-1.5 text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-1.5 rounded-lg transition-colors">
@@ -563,22 +569,38 @@ export default function OrdensServico() {
                         </div>
                       </li>
                     ))}
-                    {cardFee > 0 && (
-                      <li className="flex items-center justify-between text-sm pt-1">
-                        <span className="text-zinc-400">Subtotal</span>
-                        <span className="text-zinc-300">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
-                      </li>
-                    )}
-                    {cardFee > 0 && (
-                      <li className="flex items-center justify-between text-sm">
-                        <span className="text-yellow-400">Taxa Cartão</span>
-                        <span className="text-yellow-400">+ R$ 3,00</span>
-                      </li>
-                    )}
-                    <li className="flex justify-end pt-1 text-sm font-semibold text-white">Total: R$ {total.toFixed(2).replace('.', ',')}</li>
                   </ul>
                 )}
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Desconto (R$)" value={form.discount} onChange={v => setForm(f => ({ ...f, discount: v }))} type="number" />
+              </div>
+              {form.items.length > 0 && (
+                <ul className="space-y-1 border-t border-zinc-800 pt-3">
+                  <li className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-400">Subtotal</span>
+                    <span className="text-zinc-300">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                  </li>
+                  {cardFee > 0 && (
+                    <li className="flex items-center justify-between text-sm">
+                      <span className="text-yellow-400">Taxa Cartão</span>
+                      <span className="text-yellow-400">+ R$ 3,00</span>
+                    </li>
+                  )}
+                  {discountValue > 0 && (
+                    <li className="flex items-center justify-between text-sm">
+                      <span className="text-orange-400">Desconto</span>
+                      <span className="text-orange-400">- R$ {discountValue.toFixed(2).replace('.', ',')}</span>
+                    </li>
+                  )}
+                  <li className="flex justify-between pt-1 text-sm font-semibold text-white">
+                    <span>Total</span><span>R$ {total.toFixed(2).replace('.', ',')}</span>
+                  </li>
+                  <li className="flex justify-between text-xs text-zinc-400">
+                    <span>Sinal a antecipar (50%)</span><span>R$ {(total / 2).toFixed(2).replace('.', ',')}</span>
+                  </li>
+                </ul>
+              )}
             </div>
             {error && <p className="mx-5 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
             <div className="flex justify-end gap-3 p-5 border-t border-zinc-800">

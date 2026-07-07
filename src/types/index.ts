@@ -59,6 +59,7 @@ export interface ServiceOrder {
   plate?: string;
   description?: string;
   total_value: number;
+  discount?: number;
   entry_date: string;
   promised_date: string;
   delivery_date?: string;

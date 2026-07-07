@@ -18,6 +18,7 @@ export type ServiceOrderPayload = {
   plate: string | null;
   description: string | null;
   total_value: number;
+  discount: number;
   entry_date: string;
   promised_date: string;
   payment_method: PaymentMethod;
@@ -92,6 +93,7 @@ export function parseServiceOrderPayload(input: unknown): ValidationResult {
     : '';
   const promisedDateRaw = typeof input.promised_date === 'string' ? input.promised_date : '';
   const totalValue = Number(input.total_value ?? 0);
+  const discountValue = Number(input.discount ?? 0);
   const description = normalizeOptionalText(input.description, 500);
 
   if (!customerId && !guestName) {
@@ -135,6 +137,10 @@ export function parseServiceOrderPayload(input: unknown): ValidationResult {
     return { success: false, message: 'O valor total da OS é inválido.' };
   }
 
+  if (!Number.isFinite(discountValue) || discountValue < 0) {
+    return { success: false, message: 'O valor do desconto da OS é inválido.' };
+  }
+
   const itemsInput = Array.isArray(input.items) ? input.items : [];
   const items = itemsInput
     .filter(isRecord)
@@ -175,6 +181,7 @@ export function parseServiceOrderPayload(input: unknown): ValidationResult {
       plate,
       description: description || items.map((item) => item.description).join(', ').slice(0, 500),
       total_value: totalValue,
+      discount: discountValue,
       entry_date: new Date().toISOString(),
       promised_date: promisedDate.toISOString(),
       payment_method: paymentMethod,

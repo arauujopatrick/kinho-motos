@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
       plate,
       description,
       total_value,
+      discount,
       entry_date,
       promised_date,
       payment_method,
@@ -58,12 +59,12 @@ export async function POST(req: NextRequest) {
     const rows = await sql`
       INSERT INTO service_orders (
         id, customer_id, guest_name, guest_phone, customer_contact,
-        motorcycle, plate, description, total_value, entry_date,
+        motorcycle, plate, description, total_value, discount, entry_date,
         promised_date, payment_method, card_installments
       )
       VALUES (
         ${id}, ${customer_id}, ${guest_name}, ${guest_phone}, ${customer_contact},
-        ${motorcycle}, ${plate}, ${description}, ${total_value}, ${entry_date},
+        ${motorcycle}, ${plate}, ${description}, ${total_value}, ${discount}, ${entry_date},
         ${promised_date}, ${payment_method}, ${card_installments}
       )
       RETURNING *

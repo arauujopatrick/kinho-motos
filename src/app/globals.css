@@ -19,3 +19,19 @@ body {
   background: #3f3f46;
   border-radius: 3px;
 }
+
+@media print {
+  aside {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  body {
+    background: white !important;
+  }
+  .print-page {
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+}
