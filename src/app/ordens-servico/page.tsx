@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2, Printer } from 'lucide-react';
-import type { ServiceOrder, Customer, ServiceItem } from '@/types';
+import type { ServiceOrder, Customer, ServiceItem, Service } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatPhone, normalizePlate } from '@/lib/customer-utils';
 
-const SERVICES = ['Troca de Óleo', 'Revisão Geral', 'Pastilha de Freio', 'Pneu', 'Relação', 'Vela', 'Filtro de Ar', 'Corrente', 'Amortecedor', 'Elétrica'];
 const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Cartão'];
 const STATUS_OPTIONS = ['Aberto', 'Em andamento', 'Finalizado'];
 
@@ -123,6 +122,7 @@ async function fetchCustomersFromApi() {
 export default function OrdensServico() {
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [modal, setModal] = useState(false);
@@ -134,6 +134,10 @@ export default function OrdensServico() {
   const [error, setError] = useState('');
   const [pageError, setPageError] = useState('');
   const [loadingData, setLoadingData] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/servicos').then(r => r.json()).then(setServices).catch(() => setServices([]));
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -550,9 +554,13 @@ export default function OrdensServico() {
               <div>
                 <label className="block text-xs text-zinc-400 mb-2">Serviços / Peças</label>
                 <div className="flex gap-2 mb-2">
-                  <select value={itemDesc} onChange={e => setItemDesc(e.target.value)} className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
+                  <select value={itemDesc} onChange={e => {
+                    const chosen = services.find(s => s.name === e.target.value);
+                    setItemDesc(e.target.value);
+                    if (chosen && chosen.price) setItemPrice(String(chosen.price));
+                  }} className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
                     <option value="">Selecionar serviço...</option>
-                    {SERVICES.map(s => <option key={s}>{s}</option>)}
+                    {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                   </select>
                   <input value={itemDesc} onChange={e => setItemDesc(e.target.value)} placeholder="ou digitar" className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <input value={itemPrice} onChange={e => setItemPrice(e.target.value)} placeholder="R$" type="number" className="w-24 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />

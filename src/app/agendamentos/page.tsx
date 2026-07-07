@@ -2,13 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, X, Calendar, ClipboardList, Settings, Trash2, Pencil } from 'lucide-react';
-import type { Appointment, Customer } from '@/types';
+import type { Appointment, Customer, Service } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const DEFAULT_SERVICES = ['Troca de Óleo', 'Revisão Geral', 'Pastilha de Freio', 'Pneu', 'Relação', 'Vela', 'Filtro de Ar', 'Corrente', 'Amortecedor', 'Elétrica'];
 const STATUS_COLOR: Record<string, string> = { 'Agendado': 'bg-blue-500/20 text-blue-400', 'Confirmado': 'bg-green-500/20 text-green-400', 'Cancelado': 'bg-red-500/20 text-red-400', 'Concluido': 'bg-zinc-700 text-zinc-400' };
-const STORAGE_KEY = 'kinho_services';
 
 type Tab = 'agendamentos' | 'servicos';
 
@@ -19,50 +17,61 @@ export default function Agendamentos() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', service: '', date: '', time: '' });
 
-  // Catálogo de serviços (gerenciado localmente)
-  const [services, setServices] = useState<string[]>([]);
-  const [newService, setNewService] = useState('');
-  const [editingService, setEditingService] = useState<{ idx: number; value: string } | null>(null);
+  // Catálogo de serviços (persistido no banco)
+  const [services, setServices] = useState<Service[]>([]);
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServicePrice, setNewServicePrice] = useState('');
+  const [editingService, setEditingService] = useState<{ id: string; name: string; price: string } | null>(null);
+  const [serviceError, setServiceError] = useState('');
 
   useEffect(() => {
     Promise.all([
       fetch('/api/agendamentos').then(r => r.json()),
       fetch('/api/clientes').then(r => r.json()),
-    ]).then(([a, c]) => { setAppointments(a); setCustomers(c); });
-
-    const stored = localStorage.getItem(STORAGE_KEY);
-    setServices(stored ? JSON.parse(stored) : DEFAULT_SERVICES);
+      fetch('/api/servicos').then(r => r.json()),
+    ]).then(([a, c, s]) => { setAppointments(a); setCustomers(c); setServices(s); });
   }, []);
 
-  function saveServices(list: string[]) {
-    setServices(list);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  async function addService() {
+    const name = newServiceName.trim();
+    if (!name) return;
+    setServiceError('');
+    try {
+      const res = await fetch('/api/servicos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, price: parseFloat(newServicePrice) || 0 }) });
+      if (!res.ok) throw new Error(await res.text());
+      const created = await res.json();
+      setServices(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setNewServiceName('');
+      setNewServicePrice('');
+    } catch (e) {
+      setServiceError(e instanceof Error ? e.message : 'Erro ao adicionar serviço');
+    }
   }
 
-  function addService() {
-    const s = newService.trim();
-    if (!s || services.includes(s)) return;
-    saveServices([...services, s]);
-    setNewService('');
-  }
-
-  function deleteService(idx: number) {
+  async function deleteService(id: string) {
     if (!confirm('Remover este serviço?')) return;
-    saveServices(services.filter((_, i) => i !== idx));
+    const res = await fetch(`/api/servicos/${id}`, { method: 'DELETE' });
+    if (res.ok) setServices(prev => prev.filter(s => s.id !== id));
   }
 
-  function startEdit(idx: number) {
-    setEditingService({ idx, value: services[idx] });
+  function startEdit(s: Service) {
+    setEditingService({ id: s.id, name: s.name, price: String(s.price) });
   }
 
-  function confirmEdit() {
+  async function confirmEdit() {
     if (!editingService) return;
-    const trimmed = editingService.value.trim();
-    if (!trimmed) return;
-    const updated = [...services];
-    updated[editingService.idx] = trimmed;
-    saveServices(updated);
-    setEditingService(null);
+    const name = editingService.name.trim();
+    if (!name) return;
+    setServiceError('');
+    try {
+      const res = await fetch(`/api/servicos/${editingService.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, price: parseFloat(editingService.price) || 0 }) });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      setServices(prev => prev.map(s => s.id === updated.id ? updated : s).sort((a, b) => a.name.localeCompare(b.name)));
+      setEditingService(null);
+    } catch (e) {
+      setServiceError(e instanceof Error ? e.message : 'Erro ao editar serviço');
+    }
   }
 
   async function save() {
@@ -163,44 +172,61 @@ export default function Agendamentos() {
           {/* Adicionar novo */}
           <div className="flex gap-3">
             <input
-              value={newService}
-              onChange={e => setNewService(e.target.value)}
+              value={newServiceName}
+              onChange={e => setNewServiceName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addService()}
               placeholder="Nome do serviço..."
               className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
+            />
+            <input
+              value={newServicePrice}
+              onChange={e => setNewServicePrice(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addService()}
+              placeholder="R$ (opcional)"
+              type="number"
+              className="w-36 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
             />
             <button onClick={addService} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">
               <Plus size={16} /> Adicionar
             </button>
           </div>
+          {serviceError && <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{serviceError}</p>}
 
           <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
             {services.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhum serviço cadastrado</p>}
-            {services.map((s, idx) => (
-              <div key={idx} className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 transition-colors">
-                {editingService?.idx === idx ? (
+            {services.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 transition-colors">
+                {editingService?.id === s.id ? (
                   <>
                     <input
                       autoFocus
-                      value={editingService.value}
-                      onChange={e => setEditingService({ idx, value: e.target.value })}
+                      value={editingService.name}
+                      onChange={e => setEditingService({ ...editingService, name: e.target.value })}
                       onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditingService(null); }}
                       className="flex-1 bg-zinc-800 border border-orange-500 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
+                    />
+                    <input
+                      value={editingService.price}
+                      onChange={e => setEditingService({ ...editingService, price: e.target.value })}
+                      onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditingService(null); }}
+                      type="number"
+                      className="w-28 bg-zinc-800 border border-orange-500 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
                     />
                     <button onClick={confirmEdit} className="text-xs bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg transition-colors">Salvar</button>
                     <button onClick={() => setEditingService(null)} className="text-zinc-400 hover:text-white text-xs px-2 py-1.5">Cancelar</button>
                   </>
                 ) : (
                   <>
-                    <span className="flex-1 text-white text-sm">{s}</span>
-                    <button onClick={() => startEdit(idx)} className="text-zinc-400 hover:text-white p-1 rounded transition-colors"><Pencil size={14} /></button>
-                    <button onClick={() => deleteService(idx)} className="text-zinc-400 hover:text-red-400 p-1 rounded transition-colors"><Trash2 size={14} /></button>
+                    <span className="flex-1 text-white text-sm">{s.name}</span>
+                    <span className="text-zinc-400 text-sm">{s.price ? `R$ ${Number(s.price).toFixed(2).replace('.', ',')}` : '—'}</span>
+                    <button onClick={() => startEdit(s)} className="text-zinc-400 hover:text-white p-1 rounded transition-colors"><Pencil size={14} /></button>
+                    <button onClick={() => deleteService(s.id)} className="text-zinc-400 hover:text-red-400 p-1 rounded transition-colors"><Trash2 size={14} /></button>
                   </>
                 )}
               </div>
             ))}
           </div>
-          <p className="text-zinc-600 text-xs">Os serviços desta lista aparecem no dropdown ao criar agendamentos e OS.</p>
+          <p className="text-zinc-600 text-xs">Os serviços deste catálogo aparecem no dropdown ao criar agendamentos, OS e orçamentos.</p>
         </div>
       )}
 
@@ -239,7 +265,7 @@ export default function Agendamentos() {
                 <label className="block text-xs text-zinc-400 mb-1">Serviço *</label>
                 <select value={form.service} onChange={e => setForm(f => ({ ...f, service: e.target.value }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
                   <option value="">Selecionar serviço...</option>
-                  {services.map(s => <option key={s}>{s}</option>)}
+                  {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">

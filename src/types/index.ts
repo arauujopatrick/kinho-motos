@@ -22,6 +22,13 @@ export interface Product {
   created_at: string;
 }
 
+export interface Service {
+  id: string;
+  name: string;
+  price: number;
+  created_at: string;
+}
+
 export interface CartItem {
   product: Product;
   quantity: number;

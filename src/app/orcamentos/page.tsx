@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { Plus, X, FileText, Check, XCircle } from 'lucide-react';
-import type { Quote, Customer, ServiceItem } from '@/types';
+import type { Quote, Customer, ServiceItem, Service } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-const SERVICES = ['Troca de Óleo', 'Revisão Geral', 'Pastilha de Freio', 'Pneu', 'Relação', 'Vela', 'Filtro de Ar', 'Corrente', 'Amortecedor', 'Elétrica'];
 const statusColor: Record<string, string> = { 'Pendente': 'bg-yellow-500/20 text-yellow-400', 'Aprovado': 'bg-green-500/20 text-green-400', 'Recusado': 'bg-red-500/20 text-red-400' };
 
 export default function Orcamentos() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', valid_until: '', items: [] as ServiceItem[] });
   const [itemDesc, setItemDesc] = useState('');
@@ -23,7 +23,8 @@ export default function Orcamentos() {
     Promise.all([
       fetch('/api/orcamentos').then(r => r.json()),
       fetch('/api/clientes').then(r => r.json()),
-    ]).then(([q, c]) => { setQuotes(q); setCustomers(c); });
+      fetch('/api/servicos').then(r => r.json()),
+    ]).then(([q, c, s]) => { setQuotes(q); setCustomers(c); setServices(s); });
   }, []);
 
   const total = form.items.reduce((s, i) => s + i.price, 0);
@@ -131,9 +132,13 @@ export default function Orcamentos() {
               <div>
                 <label className="block text-xs text-zinc-400 mb-2">Itens</label>
                 <div className="flex gap-2 mb-2">
-                  <select value={itemDesc} onChange={e => setItemDesc(e.target.value)} className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
+                  <select value={itemDesc} onChange={e => {
+                    const chosen = services.find(s => s.name === e.target.value);
+                    setItemDesc(e.target.value);
+                    if (chosen && chosen.price) setItemPrice(String(chosen.price));
+                  }} className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
                     <option value="">Selecionar...</option>
-                    {SERVICES.map(s => <option key={s}>{s}</option>)}
+                    {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                   </select>
                   <input value={itemPrice} onChange={e => setItemPrice(e.target.value)} placeholder="R$" type="number" className="w-24 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <button onClick={addItem} className="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg text-sm transition-colors">+</button>
