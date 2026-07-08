@@ -18,6 +18,8 @@ export default function Orcamentos() {
   const [itemPrice, setItemPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pageError, setPageError] = useState('');
+  const [convertingId, setConvertingId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -60,6 +62,53 @@ export default function Orcamentos() {
     setQuotes(prev => prev.map(q => q.id === id ? { ...q, status: status as Quote['status'] } : q));
   }
 
+  async function approveAndConvert(quote: Quote) {
+    setPageError('');
+    setConvertingId(quote.id);
+    try {
+      const customer = customers.find(c => c.id === quote.customer_id);
+      const body = {
+        customer_id: quote.customer_id || '',
+        guest_name: quote.guest_name || '',
+        guest_phone: quote.guest_phone || '',
+        customer_contact: customer ? (customer.whatsapp || customer.phone) : (quote.guest_phone || ''),
+        motorcycle: quote.motorcycle || customer?.motorcycle || '',
+        plate: quote.plate || customer?.plate || '',
+        description: quote.description || '',
+        items: quote.items || [],
+        total_value: quote.total_value,
+        discount: 0,
+        promised_date: quote.valid_until ? String(quote.valid_until).slice(0, 10) : new Date().toISOString().slice(0, 10),
+        payment_method: 'Dinheiro',
+      };
+
+      const res = await fetch('/api/ordens-servico', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+
+      const createdOrder = await res.json();
+
+      await fetch(`/api/orcamentos/${quote.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Aprovado' }),
+      });
+      setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, status: 'Aprovado' } : q));
+
+      window.open(`/ordens-servico/${createdOrder.id}/imprimir`, '_blank');
+    } catch (e) {
+      setPageError(e instanceof Error ? e.message : 'Não foi possível converter o orçamento em OS. Confira se a moto e o telefone do cliente estão preenchidos.');
+    } finally {
+      setConvertingId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -71,6 +120,12 @@ export default function Orcamentos() {
           <Plus size={16} /> Novo Orçamento
         </button>
       </div>
+
+      {pageError && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-sm px-4 py-3 rounded-lg">
+          {pageError}
+        </div>
+      )}
 
       <div className="grid gap-4">
         {quotes.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhum orçamento</p>}
@@ -92,8 +147,8 @@ export default function Orcamentos() {
             </div>
             {q.status === 'Pendente' && (
               <div className="flex gap-2 mt-4 pt-4 border-t border-zinc-800">
-                <button onClick={() => updateStatus(q.id, 'Aprovado')} className="flex items-center gap-1.5 text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">
-                  <Check size={14} /> Aprovar
+                <button onClick={() => approveAndConvert(q)} disabled={convertingId === q.id} className="flex items-center gap-1.5 text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 disabled:opacity-50 px-3 py-1.5 rounded-lg transition-colors">
+                  <Check size={14} /> {convertingId === q.id ? 'Gerando OS...' : 'Aprovar e gerar OS'}
                 </button>
                 <button onClick={() => updateStatus(q.id, 'Recusado')} className="flex items-center gap-1.5 text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg transition-colors">
                   <XCircle size={14} /> Recusar
