@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2, Printer } from 'lucide-react';
-import type { ServiceOrder, Customer, ServiceItem, Service } from '@/types';
+import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2, Printer, DollarSign } from 'lucide-react';
+import type { ServiceOrder, Customer, ServiceItem, Service, Product } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatPhone, normalizePlate } from '@/lib/customer-utils';
@@ -59,6 +59,8 @@ const normalizeServiceItems = (items: unknown): ServiceItem[] => {
       quote_id: typeof item.quote_id === 'string' ? item.quote_id : undefined,
       description: typeof item.description === 'string' && item.description.trim() ? item.description : 'Item sem descrição',
       price: toMoneyNumber(item.price),
+      product_id: typeof item.product_id === 'string' ? item.product_id : null,
+      quantity: typeof item.quantity === 'number' ? item.quantity : null,
     }));
 };
 
@@ -123,6 +125,7 @@ export default function OrdensServico() {
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [modal, setModal] = useState(false);
@@ -130,6 +133,8 @@ export default function OrdensServico() {
   const [form, setForm] = useState(emptyForm);
   const [itemDesc, setItemDesc] = useState('');
   const [itemPrice, setItemPrice] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [productQty, setProductQty] = useState('1');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [pageError, setPageError] = useState('');
@@ -137,6 +142,7 @@ export default function OrdensServico() {
 
   useEffect(() => {
     fetch('/api/servicos').then(r => r.json()).then(setServices).catch(() => setServices([]));
+    fetch('/api/produtos').then(r => r.json()).then(setProducts).catch(() => setProducts([]));
   }, []);
 
   useEffect(() => {
@@ -224,13 +230,23 @@ export default function OrdensServico() {
     const status = order.status || 'Aberto';
     const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || plate.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'Todos' || status === filterStatus;
-    return matchSearch && matchStatus;
+    return matchSearch && matchStatus && !order.received;
   });
 
   function addItem() {
     if (!itemDesc || !itemPrice) return;
     setForm(f => ({ ...f, items: [...f.items, { id: crypto.randomUUID(), description: itemDesc, price: toMoneyNumber(itemPrice) }] }));
     setItemDesc(''); setItemPrice('');
+  }
+
+  function addProductItem() {
+    const product = products.find(p => p.id === selectedProductId);
+    const qty = parseInt(productQty) || 1;
+    if (!product || qty <= 0) return;
+    const price = Number(product.price) * qty;
+    setForm(f => ({ ...f, items: [...f.items, { id: crypto.randomUUID(), description: qty > 1 ? `${product.name} (x${qty})` : product.name, price, product_id: product.id, quantity: qty }] }));
+    setSelectedProductId('');
+    setProductQty('1');
   }
 
   function removeItem(id: string) { setForm(f => ({ ...f, items: f.items.filter(i => i.id !== id) })); }
@@ -333,6 +349,12 @@ export default function OrdensServico() {
       setForm(emptyForm);
       setItemDesc('');
       setItemPrice('');
+      setSelectedProductId('');
+      setProductQty('1');
+
+      if (!editingId) {
+        void fetch('/api/produtos').then(r => r.json()).then(setProducts).catch(() => {});
+      }
 
       void refreshOrders().catch(() => {
         setPageError('OS salva, mas não foi possível atualizar a listagem agora.');
@@ -361,6 +383,8 @@ export default function OrdensServico() {
     });
     setItemDesc('');
     setItemPrice('');
+    setSelectedProductId('');
+    setProductQty('1');
     setError('');
     setModal(true);
   }
@@ -416,6 +440,26 @@ export default function OrdensServico() {
     }
   }
 
+  async function markReceived(id: string) {
+    setPageError('');
+
+    try {
+      const response = await fetch(`/api/ordens-servico/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ received: true }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getResponseMessage(response, 'Não foi possível marcar esta OS como recebida.'));
+      }
+
+      setOrders((currentOrders) => currentOrders.map((order) => order.id === id ? { ...order, received: true } : order));
+    } catch (receivedError) {
+      setPageError(receivedError instanceof Error ? receivedError.message : 'Não foi possível marcar esta OS como recebida.');
+    }
+  }
+
   function whatsapp(o: ServiceOrder) {
     const contact = o.customer_contact || o.guest_phone || '';
     const msg = encodeURIComponent(`Olá! Sua moto ${o.motorcycle || ''} está pronta para retirada. Valor: ${formatCurrency(o.total_value)}`);
@@ -433,7 +477,7 @@ export default function OrdensServico() {
             {loadingData ? 'Carregando ordens de serviço...' : `${orders.filter((order) => (order.status || 'Aberto') !== 'Finalizado').length} OS abertas`}
           </p>
         </div>
-        <button onClick={() => { setEditingId(null); setForm(emptyForm); setItemDesc(''); setItemPrice(''); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button onClick={() => { setEditingId(null); setForm(emptyForm); setItemDesc(''); setItemPrice(''); setSelectedProductId(''); setProductQty('1'); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Nova OS
         </button>
       </div>
@@ -496,6 +540,11 @@ export default function OrdensServico() {
               {status !== 'Finalizado' && (
                 <button onClick={() => updateStatus(order.id, 'Finalizado')} className="flex items-center gap-1.5 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg transition-colors">
                   <CheckCircle size={14} /> Finalizar
+                </button>
+              )}
+              {status === 'Finalizado' && (
+                <button onClick={() => markReceived(order.id)} className="flex items-center gap-1.5 text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">
+                  <DollarSign size={14} /> Receber
                 </button>
               )}
               <a href={`/ordens-servico/${order.id}/imprimir`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white px-3 py-1.5 rounded-lg transition-colors ml-auto">
@@ -566,6 +615,18 @@ export default function OrdensServico() {
                   <input value={itemPrice} onChange={e => setItemPrice(e.target.value)} placeholder="R$" type="number" className="w-24 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <button onClick={addItem} className="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg text-sm transition-colors">+</button>
                 </div>
+                <div className="flex gap-2 mb-2">
+                  <select value={selectedProductId} onChange={e => setSelectedProductId(e.target.value)} className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
+                    <option value="">Selecionar produto do estoque...</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id} disabled={p.stock <= 0}>
+                        {p.name} — R$ {Number(p.price).toFixed(2).replace('.', ',')} ({p.stock} em estoque)
+                      </option>
+                    ))}
+                  </select>
+                  <input value={productQty} onChange={e => setProductQty(e.target.value)} placeholder="Qtd" type="number" min={1} className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
+                  <button onClick={addProductItem} className="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg text-sm transition-colors">+</button>
+                </div>
                 {form.items.length > 0 && (
                   <ul className="space-y-1.5">
                     {form.items.map(i => (
@@ -579,6 +640,7 @@ export default function OrdensServico() {
                     ))}
                   </ul>
                 )}
+                {!editingId && <p className="text-zinc-600 text-xs mt-2">Produtos do estoque adicionados aqui têm a baixa de estoque feita ao criar a OS.</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Desconto (R$)" value={form.discount} onChange={v => setForm(f => ({ ...f, discount: v }))} type="number" />

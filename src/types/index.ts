@@ -53,6 +53,8 @@ export interface ServiceItem {
   quote_id?: string;
   description: string;
   price: number;
+  product_id?: string | null;
+  quantity?: number | null;
 }
 
 export interface ServiceOrder {
@@ -73,6 +75,7 @@ export interface ServiceOrder {
   status: OSStatus;
   payment_method: PaymentMethod;
   card_installments?: number | null;
+  received?: boolean;
   items?: ServiceItem[];
   customer?: Customer;
 }

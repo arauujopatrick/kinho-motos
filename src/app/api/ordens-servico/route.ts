@@ -75,11 +75,20 @@ export async function POST(req: NextRequest) {
     for (const item of items) {
       const itemId = crypto.randomUUID();
       const itemRows = await sql`
-        INSERT INTO service_order_items (id, service_order_id, description, price)
-        VALUES (${itemId}, ${order.id}, ${item.description}, ${item.price})
+        INSERT INTO service_order_items (id, service_order_id, description, price, product_id, quantity)
+        VALUES (${itemId}, ${order.id}, ${item.description}, ${item.price}, ${item.product_id}, ${item.quantity})
         RETURNING *
       `;
       createdItems.push(itemRows[0]);
+
+      if (item.product_id && item.quantity) {
+        await sql`UPDATE products SET stock = GREATEST(stock - ${item.quantity}, 0) WHERE id = ${item.product_id}`;
+        const movementId = crypto.randomUUID();
+        await sql`
+          INSERT INTO stock_movements (id, product_id, type, quantity, reason)
+          VALUES (${movementId}, ${item.product_id}, 'OUT', ${item.quantity}, ${'Uso em OS'})
+        `;
+      }
     }
 
     return NextResponse.json({ ...order, items: createdItems }, { status: 201, headers: NO_STORE_HEADERS });

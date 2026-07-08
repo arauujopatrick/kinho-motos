@@ -7,6 +7,8 @@ type ServiceOrderItemInput = {
   id: string;
   description: string;
   price: number;
+  product_id: string | null;
+  quantity: number | null;
 };
 
 export type ServiceOrderPayload = {
@@ -152,10 +154,16 @@ export function parseServiceOrderPayload(input: unknown): ValidationResult {
         return null;
       }
 
+      const productId = typeof item.product_id === 'string' && isUuid(item.product_id) ? item.product_id : null;
+      const quantityRaw = Number(item.quantity);
+      const quantity = productId && Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.floor(quantityRaw) : null;
+
       return {
         id: isUuid(item.id) ? item.id : crypto.randomUUID(),
         description: normalizedDescription,
         price,
+        product_id: productId,
+        quantity,
       };
     })
     .filter((item): item is ServiceOrderItemInput => item !== null);

@@ -44,6 +44,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const body = await req.json();
     const isBodyRecord = typeof body === 'object' && body !== null;
 
+    if (isBodyRecord && typeof body.received === 'boolean' && Object.keys(body).length === 1) {
+      const rows = await sql`
+        UPDATE service_orders SET received = ${body.received}
+        WHERE id = ${id}
+        RETURNING *
+      `;
+
+      if (!rows[0]) {
+        return NextResponse.json({ message: 'Ordem de serviço não encontrada.' }, { status: 404, headers: NO_STORE_HEADERS });
+      }
+
+      return NextResponse.json(rows[0], { headers: NO_STORE_HEADERS });
+    }
+
     if (
       isBodyRecord &&
       typeof body.status === 'string' &&
@@ -130,8 +144,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     for (const item of items) {
       const itemId = crypto.randomUUID();
       const itemRows = await sql`
-        INSERT INTO service_order_items (id, service_order_id, description, price)
-        VALUES (${itemId}, ${id}, ${item.description}, ${item.price})
+        INSERT INTO service_order_items (id, service_order_id, description, price, product_id, quantity)
+        VALUES (${itemId}, ${id}, ${item.description}, ${item.price}, ${item.product_id}, ${item.quantity})
         RETURNING *
       `;
       updatedItems.push(itemRows[0]);
