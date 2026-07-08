@@ -630,7 +630,6 @@ export default function OrdensServico() {
                     <option value="">Selecionar serviço...</option>
                     {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
                   </select>
-                  <input value={itemDesc} onChange={e => setItemDesc(e.target.value)} placeholder="ou digitar" className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <input value={itemPrice} onChange={e => setItemPrice(e.target.value)} placeholder="R$" type="number" className="w-24 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <button onClick={addItem} className="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg text-sm transition-colors">+</button>
                 </div>
