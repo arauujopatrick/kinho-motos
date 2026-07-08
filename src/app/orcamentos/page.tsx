@@ -94,11 +94,16 @@ export default function Orcamentos() {
 
       const createdOrder = await res.json();
 
-      await fetch(`/api/orcamentos/${quote.id}`, {
+      const statusRes = await fetch(`/api/orcamentos/${quote.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Aprovado' }),
       });
+
+      if (!statusRes.ok) {
+        throw new Error(await statusRes.text());
+      }
+
       setQuotes(prev => prev.map(q => q.id === quote.id ? { ...q, status: 'Aprovado' } : q));
 
       window.open(`/ordens-servico/${createdOrder.id}/imprimir`, '_blank');
