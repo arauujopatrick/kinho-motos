@@ -135,6 +135,7 @@ export default function OrdensServico() {
   const [itemPrice, setItemPrice] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [productQty, setProductQty] = useState('1');
+  const [productSearch, setProductSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [pageError, setPageError] = useState('');
@@ -352,6 +353,7 @@ export default function OrdensServico() {
       setItemPrice('');
       setSelectedProductId('');
       setProductQty('1');
+      setProductSearch('');
 
       if (!editingId) {
         void fetch('/api/produtos').then(r => r.json()).then(setProducts).catch(() => {});
@@ -394,6 +396,7 @@ export default function OrdensServico() {
     setItemPrice('');
     setSelectedProductId('');
     setProductQty('1');
+    setProductSearch('');
     setError('');
     setModal(true);
   }
@@ -486,7 +489,7 @@ export default function OrdensServico() {
             {loadingData ? 'Carregando ordens de serviço...' : `${orders.filter((order) => (order.status || 'Aberto') !== 'Finalizado').length} OS abertas`}
           </p>
         </div>
-        <button onClick={() => { setEditingId(null); setForm(emptyForm); setItemDesc(''); setItemPrice(''); setSelectedProductId(''); setProductQty('1'); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button onClick={() => { setEditingId(null); setForm(emptyForm); setItemDesc(''); setItemPrice(''); setSelectedProductId(''); setProductQty('1'); setProductSearch(''); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Nova OS
         </button>
       </div>
@@ -624,14 +627,17 @@ export default function OrdensServico() {
                   <input value={itemPrice} onChange={e => setItemPrice(e.target.value)} placeholder="R$" type="number" className="w-24 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <button onClick={addItem} className="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg text-sm transition-colors">+</button>
                 </div>
+                <input value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder="Buscar produto do estoque pelo nome..." className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 mb-2" />
                 <div className="flex gap-2 mb-2">
                   <select value={selectedProductId} onChange={e => setSelectedProductId(e.target.value)} className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500">
                     <option value="">Selecionar produto do estoque...</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id} disabled={p.stock <= 0}>
-                        {p.name} — R$ {Number(p.price).toFixed(2).replace('.', ',')} ({p.stock} em estoque)
-                      </option>
-                    ))}
+                    {products
+                      .filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                      .map(p => (
+                        <option key={p.id} value={p.id} disabled={p.stock <= 0}>
+                          {p.name} — R$ {Number(p.price).toFixed(2).replace('.', ',')} ({p.stock} em estoque)
+                        </option>
+                      ))}
                   </select>
                   <input value={productQty} onChange={e => setProductQty(e.target.value)} placeholder="Qtd" type="number" min={1} className="w-20 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
                   <button onClick={addProductItem} className="bg-orange-500 hover:bg-orange-600 text-white px-3 rounded-lg text-sm transition-colors">+</button>
