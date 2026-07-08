@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MessageCircle, CreditCard } from 'lucide-react';
+import { MessageCircle, CreditCard, Trash2 } from 'lucide-react';
 import type { ServiceOrder } from '@/types';
 
 export default function Cobranca() {
@@ -9,12 +9,18 @@ export default function Cobranca() {
 
   useEffect(() => { fetch('/api/ordens-servico').then(r => r.json()).then(setOrders); }, []);
 
-  const pending = orders.filter(o => o.status === 'Finalizado');
+  const pending = orders.filter(o => o.status === 'Finalizado' && !o.received);
 
   function whatsapp(o: ServiceOrder) {
     const contact = o.customer_contact || o.guest_phone || '';
     const msg = encodeURIComponent(`Olá! Lembramos que sua moto ${o.motorcycle} está disponível para retirada. Valor: R$ ${Number(o.total_value).toFixed(2).replace('.', ',')}.`);
     window.open(`https://wa.me/55${contact.replace(/\D/g, '')}?text=${msg}`, '_blank');
+  }
+
+  async function removeOrder(id: string) {
+    if (!confirm('Excluir esta OS da cobrança? Essa ação remove a ordem de serviço.')) return;
+    const res = await fetch(`/api/ordens-servico/${id}`, { method: 'DELETE' });
+    if (res.ok) setOrders(prev => prev.filter(o => o.id !== id));
   }
 
   return (
@@ -38,6 +44,9 @@ export default function Cobranca() {
               <p className="text-xl font-bold text-white">R$ {Number(o.total_value).toFixed(2).replace('.', ',')}</p>
               <button onClick={() => whatsapp(o)} className="flex items-center gap-2 bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-2 rounded-lg text-sm transition-colors">
                 <MessageCircle size={16} /> WhatsApp
+              </button>
+              <button onClick={() => removeOrder(o.id)} className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 px-3 py-2 rounded-lg text-sm transition-colors">
+                <Trash2 size={16} />
               </button>
             </div>
           </div>
