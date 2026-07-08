@@ -128,8 +128,8 @@ export default function Orcamentos() {
       )}
 
       <div className="grid gap-4">
-        {quotes.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhum orçamento</p>}
-        {quotes.map(q => (
+        {quotes.filter(q => q.status !== 'Aprovado').length === 0 && <p className="text-center text-zinc-500 py-10">Nenhum orçamento</p>}
+        {quotes.filter(q => q.status !== 'Aprovado').map(q => (
           <div key={q.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-5">
             <div className="flex items-start justify-between">
               <div className="flex-1">
