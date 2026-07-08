@@ -10,7 +10,17 @@ import { formatPhone, normalizePlate } from '@/lib/customer-utils';
 const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Cartão'];
 const STATUS_OPTIONS = ['Aberto', 'Em andamento', 'Finalizado'];
 
-const emptyForm = { customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', description: '', promised_date: '', payment_method: 'Dinheiro', card_installments: '', discount: '', items: [] as ServiceItem[] };
+function getDefaultPromisedDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getEmptyForm() {
+  return { customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', description: '', promised_date: getDefaultPromisedDate(), payment_method: 'Dinheiro', card_installments: '', discount: '', items: [] as ServiceItem[] };
+}
 
 type ApiErrorResponse = {
   message?: string;
@@ -130,7 +140,7 @@ export default function OrdensServico() {
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [modal, setModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(getEmptyForm);
   const [itemDesc, setItemDesc] = useState('');
   const [itemPrice, setItemPrice] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -348,7 +358,7 @@ export default function OrdensServico() {
       );
       setModal(false);
       setEditingId(null);
-      setForm(emptyForm);
+      setForm(getEmptyForm());
       setItemDesc('');
       setItemPrice('');
       setSelectedProductId('');
@@ -489,7 +499,7 @@ export default function OrdensServico() {
             {loadingData ? 'Carregando ordens de serviço...' : `${orders.filter((order) => (order.status || 'Aberto') !== 'Finalizado').length} OS abertas`}
           </p>
         </div>
-        <button onClick={() => { setEditingId(null); setForm(emptyForm); setItemDesc(''); setItemPrice(''); setSelectedProductId(''); setProductQty('1'); setProductSearch(''); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+        <button onClick={() => { setEditingId(null); setForm(getEmptyForm()); setItemDesc(''); setItemPrice(''); setSelectedProductId(''); setProductQty('1'); setProductSearch(''); setError(''); setModal(true); }} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
           <Plus size={16} /> Nova OS
         </button>
       </div>
