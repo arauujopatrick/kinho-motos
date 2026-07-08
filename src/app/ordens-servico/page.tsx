@@ -253,7 +253,8 @@ export default function OrdensServico() {
 
   const subtotal = form.items.reduce((s, i) => s + toMoneyNumber(i.price), 0);
   const cardFee = form.payment_method === 'Cartão' ? 3 : 0;
-  const discountValue = Math.min(toMoneyNumber(form.discount), subtotal + cardFee);
+  const discountPercent = Math.min(Math.max(toMoneyNumber(form.discount), 0), 100);
+  const discountValue = (subtotal + cardFee) * (discountPercent / 100);
   const total = Math.max(subtotal + cardFee - discountValue, 0);
 
   async function refreshOrders(showLoader = false) {
@@ -368,6 +369,14 @@ export default function OrdensServico() {
 
   function openEdit(order: ServiceOrder) {
     setEditingId(order.id);
+    const items = normalizeServiceItems(order.items);
+    const itemsSubtotal = items.reduce((s, i) => s + toMoneyNumber(i.price), 0);
+    const orderCardFee = order.payment_method === 'Cartão' ? 3 : 0;
+    const baseValue = itemsSubtotal + orderCardFee;
+    const discountPercentFromOrder = order.discount && baseValue > 0
+      ? Math.round((Number(order.discount) / baseValue) * 10000) / 100
+      : '';
+
     setForm({
       customer_id: order.customer_id || '',
       guest_name: order.guest_name || '',
@@ -378,8 +387,8 @@ export default function OrdensServico() {
       promised_date: order.promised_date ? String(order.promised_date).slice(0, 10) : '',
       payment_method: order.payment_method || 'Dinheiro',
       card_installments: order.card_installments ? String(order.card_installments) : '',
-      discount: order.discount ? String(order.discount) : '',
-      items: normalizeServiceItems(order.items),
+      discount: discountPercentFromOrder ? String(discountPercentFromOrder) : '',
+      items,
     });
     setItemDesc('');
     setItemPrice('');
@@ -643,7 +652,7 @@ export default function OrdensServico() {
                 {!editingId && <p className="text-zinc-600 text-xs mt-2">Produtos do estoque adicionados aqui têm a baixa de estoque feita ao criar a OS.</p>}
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Desconto (R$)" value={form.discount} onChange={v => setForm(f => ({ ...f, discount: v }))} type="number" />
+                <Field label="Desconto (%)" value={form.discount} onChange={v => setForm(f => ({ ...f, discount: v }))} type="number" />
               </div>
               {form.items.length > 0 && (
                 <ul className="space-y-1 border-t border-zinc-800 pt-3">
@@ -659,7 +668,7 @@ export default function OrdensServico() {
                   )}
                   {discountValue > 0 && (
                     <li className="flex items-center justify-between text-sm">
-                      <span className="text-orange-400">Desconto</span>
+                      <span className="text-orange-400">Desconto ({discountPercent}%)</span>
                       <span className="text-orange-400">- R$ {discountValue.toFixed(2).replace('.', ',')}</span>
                     </li>
                   )}
