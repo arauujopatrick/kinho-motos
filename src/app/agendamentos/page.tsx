@@ -1,28 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, X, Calendar, ClipboardList, Settings, Trash2, Pencil } from 'lucide-react';
+import { Plus, X, Calendar, ClipboardList } from 'lucide-react';
 import type { Appointment, Customer, Service } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const STATUS_COLOR: Record<string, string> = { 'Agendado': 'bg-blue-500/20 text-blue-400', 'Confirmado': 'bg-green-500/20 text-green-400', 'Cancelado': 'bg-red-500/20 text-red-400', 'Concluido': 'bg-zinc-700 text-zinc-400' };
 
-type Tab = 'agendamentos' | 'servicos';
-
 export default function Agendamentos() {
-  const [tab, setTab] = useState<Tab>('agendamentos');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ customer_id: '', guest_name: '', guest_phone: '', motorcycle: '', plate: '', service: '', date: '', time: '' });
-
-  // Catálogo de serviços (persistido no banco)
-  const [services, setServices] = useState<Service[]>([]);
-  const [newServiceName, setNewServiceName] = useState('');
-  const [newServicePrice, setNewServicePrice] = useState('');
-  const [editingService, setEditingService] = useState<{ id: string; name: string; price: string } | null>(null);
-  const [serviceError, setServiceError] = useState('');
 
   useEffect(() => {
     Promise.all([
@@ -31,48 +22,6 @@ export default function Agendamentos() {
       fetch('/api/servicos').then(r => r.json()),
     ]).then(([a, c, s]) => { setAppointments(a); setCustomers(c); setServices(s); });
   }, []);
-
-  async function addService() {
-    const name = newServiceName.trim();
-    if (!name) return;
-    setServiceError('');
-    try {
-      const res = await fetch('/api/servicos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, price: parseFloat(newServicePrice) || 0 }) });
-      if (!res.ok) throw new Error(await res.text());
-      const created = await res.json();
-      setServices(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-      setNewServiceName('');
-      setNewServicePrice('');
-    } catch (e) {
-      setServiceError(e instanceof Error ? e.message : 'Erro ao adicionar serviço');
-    }
-  }
-
-  async function deleteService(id: string) {
-    if (!confirm('Remover este serviço?')) return;
-    const res = await fetch(`/api/servicos/${id}`, { method: 'DELETE' });
-    if (res.ok) setServices(prev => prev.filter(s => s.id !== id));
-  }
-
-  function startEdit(s: Service) {
-    setEditingService({ id: s.id, name: s.name, price: String(s.price) });
-  }
-
-  async function confirmEdit() {
-    if (!editingService) return;
-    const name = editingService.name.trim();
-    if (!name) return;
-    setServiceError('');
-    try {
-      const res = await fetch(`/api/servicos/${editingService.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, price: parseFloat(editingService.price) || 0 }) });
-      if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
-      setServices(prev => prev.map(s => s.id === updated.id ? updated : s).sort((a, b) => a.name.localeCompare(b.name)));
-      setEditingService(null);
-    } catch (e) {
-      setServiceError(e instanceof Error ? e.message : 'Erro ao editar serviço');
-    }
-  }
 
   async function save() {
     if (!form.service || !form.date || !form.time) return;
@@ -109,126 +58,39 @@ export default function Agendamentos() {
           <h1 className="text-2xl font-bold text-white">Agendamentos</h1>
           <p className="text-zinc-400 text-sm mt-1">{appointments.filter(a => a.status === 'Agendado').length} agendamentos ativos</p>
         </div>
-        {tab === 'agendamentos' && (
-          <button onClick={openModal} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            <Plus size={16} /> Novo Agendamento
-          </button>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-zinc-800">
-        <button
-          onClick={() => setTab('agendamentos')}
-          className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${tab === 'agendamentos' ? 'border-orange-500 text-orange-400' : 'border-transparent text-zinc-400 hover:text-white'}`}
-        >
-          <Calendar size={15} /> Agendamentos
-          <span className="bg-zinc-800 text-zinc-400 text-xs px-1.5 py-0.5 rounded-full">{appointments.length}</span>
-        </button>
-        <button
-          onClick={() => setTab('servicos')}
-          className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${tab === 'servicos' ? 'border-orange-500 text-orange-400' : 'border-transparent text-zinc-400 hover:text-white'}`}
-        >
-          <Settings size={15} /> Serviços
-          <span className="bg-zinc-800 text-zinc-400 text-xs px-1.5 py-0.5 rounded-full">{services.length}</span>
+        <button onClick={openModal} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+          <Plus size={16} /> Novo Agendamento
         </button>
       </div>
 
-      {/* Aba Agendamentos */}
-      {tab === 'agendamentos' && (
-        <div className="grid gap-3">
-          {appointments.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhum agendamento</p>}
-          {appointments.map(a => (
-            <div key={a.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 flex items-center gap-4">
-              <div className="bg-zinc-800 rounded-lg p-3 text-center min-w-14">
-                <p className="text-orange-400 text-xs font-medium">{a.date ? format(new Date(a.date), 'MMM', { locale: ptBR }).toUpperCase() : '—'}</p>
-                <p className="text-white text-xl font-bold leading-none">{a.date ? format(new Date(a.date), 'dd') : '—'}</p>
-                <p className="text-zinc-400 text-xs">{a.time?.slice(0, 5)}</p>
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[a.status]}`}>{a.status}</span>
-                </div>
-                <p className="text-white font-medium">{a.guest_name || a.customer_name || '—'}</p>
-                <p className="text-zinc-400 text-sm">{a.service} • {a.motorcycle} {a.plate ? `• ${a.plate}` : ''}</p>
-              </div>
-              <div className="flex gap-2 flex-wrap justify-end">
-                {a.status === 'Agendado' && (
-                  <>
-                    <button onClick={() => updateStatus(a.id, 'Confirmado')} className="text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">Confirmar</button>
-                    <button onClick={() => convertToOS(a)} className="flex items-center gap-1.5 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg transition-colors"><ClipboardList size={12} /> OS</button>
-                    <button onClick={() => updateStatus(a.id, 'Cancelado')} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg transition-colors">Cancelar</button>
-                  </>
-                )}
-              </div>
+      <div className="grid gap-3">
+        {appointments.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhum agendamento</p>}
+        {appointments.map(a => (
+          <div key={a.id} className="bg-zinc-900 rounded-xl border border-zinc-800 p-4 flex items-center gap-4">
+            <div className="bg-zinc-800 rounded-lg p-3 text-center min-w-14">
+              <p className="text-orange-400 text-xs font-medium">{a.date ? format(new Date(a.date), 'MMM', { locale: ptBR }).toUpperCase() : '—'}</p>
+              <p className="text-white text-xl font-bold leading-none">{a.date ? format(new Date(a.date), 'dd') : '—'}</p>
+              <p className="text-zinc-400 text-xs">{a.time?.slice(0, 5)}</p>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Aba Serviços */}
-      {tab === 'servicos' && (
-        <div className="space-y-4">
-          {/* Adicionar novo */}
-          <div className="flex gap-3">
-            <input
-              value={newServiceName}
-              onChange={e => setNewServiceName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addService()}
-              placeholder="Nome do serviço..."
-              className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
-            />
-            <input
-              value={newServicePrice}
-              onChange={e => setNewServicePrice(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addService()}
-              placeholder="R$ (opcional)"
-              type="number"
-              className="w-36 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500"
-            />
-            <button onClick={addService} className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors">
-              <Plus size={16} /> Adicionar
-            </button>
-          </div>
-          {serviceError && <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{serviceError}</p>}
-
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-            {services.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhum serviço cadastrado</p>}
-            {services.map((s) => (
-              <div key={s.id} className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/50 last:border-0 hover:bg-zinc-800/30 transition-colors">
-                {editingService?.id === s.id ? (
-                  <>
-                    <input
-                      autoFocus
-                      value={editingService.name}
-                      onChange={e => setEditingService({ ...editingService, name: e.target.value })}
-                      onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditingService(null); }}
-                      className="flex-1 bg-zinc-800 border border-orange-500 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
-                    />
-                    <input
-                      value={editingService.price}
-                      onChange={e => setEditingService({ ...editingService, price: e.target.value })}
-                      onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditingService(null); }}
-                      type="number"
-                      className="w-28 bg-zinc-800 border border-orange-500 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none"
-                    />
-                    <button onClick={confirmEdit} className="text-xs bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg transition-colors">Salvar</button>
-                    <button onClick={() => setEditingService(null)} className="text-zinc-400 hover:text-white text-xs px-2 py-1.5">Cancelar</button>
-                  </>
-                ) : (
-                  <>
-                    <span className="flex-1 text-white text-sm">{s.name}</span>
-                    <span className="text-zinc-400 text-sm">{s.price ? `R$ ${Number(s.price).toFixed(2).replace('.', ',')}` : '—'}</span>
-                    <button onClick={() => startEdit(s)} className="text-zinc-400 hover:text-white p-1 rounded transition-colors"><Pencil size={14} /></button>
-                    <button onClick={() => deleteService(s.id)} className="text-zinc-400 hover:text-red-400 p-1 rounded transition-colors"><Trash2 size={14} /></button>
-                  </>
-                )}
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[a.status]}`}>{a.status}</span>
               </div>
-            ))}
+              <p className="text-white font-medium">{a.guest_name || a.customer_name || '—'}</p>
+              <p className="text-zinc-400 text-sm">{a.service} • {a.motorcycle} {a.plate ? `• ${a.plate}` : ''}</p>
+            </div>
+            <div className="flex gap-2 flex-wrap justify-end">
+              {a.status === 'Agendado' && (
+                <>
+                  <button onClick={() => updateStatus(a.id, 'Confirmado')} className="text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">Confirmar</button>
+                  <button onClick={() => convertToOS(a)} className="flex items-center gap-1.5 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 px-3 py-1.5 rounded-lg transition-colors"><ClipboardList size={12} /> OS</button>
+                  <button onClick={() => updateStatus(a.id, 'Cancelado')} className="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 px-3 py-1.5 rounded-lg transition-colors">Cancelar</button>
+                </>
+              )}
+            </div>
           </div>
-          <p className="text-zinc-600 text-xs">Os serviços deste catálogo aparecem no dropdown ao criar agendamentos, OS e orçamentos.</p>
-        </div>
-      )}
+        ))}
+      </div>
 
       {/* Modal novo agendamento */}
       {modal && (

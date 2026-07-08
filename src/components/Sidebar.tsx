@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, ClipboardList, FileText,
   Calendar, Package, DollarSign, CreditCard,
-  BarChart2, History, Wrench, ShoppingCart
+  BarChart2, History, Wrench, ShoppingCart, Settings
 } from 'lucide-react';
 
 const links = [
@@ -15,6 +15,7 @@ const links = [
   { href: '/ordens-servico', label: 'Ordens de Serviço', icon: ClipboardList },
   { href: '/orcamentos', label: 'Orçamentos', icon: FileText },
   { href: '/agendamentos', label: 'Agendamentos', icon: Calendar },
+  { href: '/servicos', label: 'Serviços', icon: Settings },
   { href: '/estoque', label: 'Estoque', icon: Package },
   { href: '/financeiro', label: 'Financeiro', icon: DollarSign },
   { href: '/cobranca', label: 'Cobrança', icon: CreditCard },
