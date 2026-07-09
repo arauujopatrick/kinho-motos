@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2, Printer, DollarSign } from 'lucide-react';
+import { Plus, Search, X, MessageCircle, CheckCircle, Pencil, Trash2, Printer, DollarSign, ClipboardList, Archive } from 'lucide-react';
 import type { ServiceOrder, Customer, ServiceItem, Service, Product } from '@/types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -136,6 +136,7 @@ export default function OrdensServico() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [tab, setTab] = useState<'ativas' | 'executadas'>('ativas');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
   const [modal, setModal] = useState(false);
@@ -241,6 +242,13 @@ export default function OrdensServico() {
     const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || plate.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'Todos' || status === filterStatus;
     return matchSearch && matchStatus && !order.received;
+  });
+
+  const executedOrders = orders.filter((order) => {
+    const name = order.guest_name || order.customer_name || '';
+    const plate = order.plate || '';
+    const matchSearch = name.toLowerCase().includes(search.toLowerCase()) || plate.toLowerCase().includes(search.toLowerCase());
+    return matchSearch && order.status === 'Finalizado';
   });
 
   function addItem() {
@@ -510,21 +518,41 @@ export default function OrdensServico() {
         </div>
       )}
 
+      <div className="flex border-b border-zinc-800">
+        <button
+          onClick={() => setTab('ativas')}
+          className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${tab === 'ativas' ? 'border-orange-500 text-orange-400' : 'border-transparent text-zinc-400 hover:text-white'}`}
+        >
+          <ClipboardList size={15} /> Em Andamento
+          <span className="bg-zinc-800 text-zinc-400 text-xs px-1.5 py-0.5 rounded-full">{filtered.length}</span>
+        </button>
+        <button
+          onClick={() => setTab('executadas')}
+          className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${tab === 'executadas' ? 'border-orange-500 text-orange-400' : 'border-transparent text-zinc-400 hover:text-white'}`}
+        >
+          <Archive size={15} /> Já Executadas
+          <span className="bg-zinc-800 text-zinc-400 text-xs px-1.5 py-0.5 rounded-full">{executedOrders.length}</span>
+        </button>
+      </div>
+
       <div className="flex gap-3">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por cliente ou placa..." className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500" />
         </div>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-500">
-          <option>Todos</option>
-          {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-        </select>
+        {tab === 'ativas' && (
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-500">
+            <option>Todos</option>
+            {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+          </select>
+        )}
       </div>
 
       <div className="grid gap-4">
         {loadingData && orders.length === 0 && <p className="text-center text-zinc-500 py-10">Carregando ordens de serviço...</p>}
-        {!loadingData && filtered.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS encontrada</p>}
-        {filtered.map((order) => {
+        {!loadingData && tab === 'ativas' && filtered.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS encontrada</p>}
+        {!loadingData && tab === 'executadas' && executedOrders.length === 0 && <p className="text-center text-zinc-500 py-10">Nenhuma OS executada ainda</p>}
+        {(tab === 'ativas' ? filtered : executedOrders).map((order) => {
           const status = order.status || 'Aberto';
           const items = normalizeServiceItems(order.items);
 
@@ -534,6 +562,7 @@ export default function OrdensServico() {
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[status] || 'bg-zinc-700 text-zinc-300'}`}>{status}</span>
+                  {order.received && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-zinc-700 text-zinc-300">Recebido</span>}
                   <span className="text-zinc-500 text-xs">Entrega: {safeFormatDate(order.promised_date)}</span>
                 </div>
                 <p className="text-white font-semibold">{order.guest_name || order.customer_name || '—'}</p>
@@ -561,7 +590,7 @@ export default function OrdensServico() {
                   <CheckCircle size={14} /> Finalizar
                 </button>
               )}
-              {status === 'Finalizado' && (
+              {status === 'Finalizado' && !order.received && (
                 <button onClick={() => markReceived(order.id)} className="flex items-center gap-1.5 text-xs bg-green-500/20 text-green-400 hover:bg-green-500/30 px-3 py-1.5 rounded-lg transition-colors">
                   <DollarSign size={14} /> Receber
                 </button>
