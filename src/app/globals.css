@@ -35,12 +35,24 @@ body {
     margin: 0 !important;
   }
   @page {
-    size: A4;
+    size: A4 portrait;
     margin: 8mm;
   }
+  .os-print-wrapper {
+    width: 100%;
+    max-width: 100% !important;
+    margin: 0 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
   .print-via {
-    height: 47vh;
+    height: 138mm;
     overflow: hidden;
     page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .print-cut {
+    height: 5mm;
+    margin: 0;
   }
 }

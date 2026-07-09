@@ -26,9 +26,9 @@ export default function ImprimirOS() {
   if (!order) return <p className="p-10 text-center text-zinc-500">Carregando...</p>;
 
   return (
-    <div className="bg-white text-black max-w-3xl mx-auto">
+    <div className="os-print-wrapper bg-white text-black max-w-3xl mx-auto">
       <Via order={order} label="1ª via — Cliente" />
-      <div className="border-t-2 border-dashed border-zinc-400 my-2 relative">
+      <div className="print-cut border-t-2 border-dashed border-zinc-400 relative">
         <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-2 text-[10px] text-zinc-500">✂ corte aqui</span>
       </div>
       <Via order={order} label="2ª via — Oficina" />
