@@ -34,4 +34,13 @@ body {
     max-width: 100% !important;
     margin: 0 !important;
   }
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
+  .print-via {
+    height: 47vh;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
 }

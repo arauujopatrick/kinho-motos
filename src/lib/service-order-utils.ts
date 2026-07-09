@@ -245,10 +245,15 @@ export function getServiceOrderApiError(error: unknown, fallbackMessage: string)
         status: 400,
         message: 'Um dos campos da OS está em formato inválido.',
       };
+    case '42703':
+      return {
+        status: 500,
+        message: `Uma coluna esperada não existe no banco (${dbError.message || 'coluna desconhecida'}). Confira se todas as migrações SQL foram executadas.`,
+      };
     default:
       return {
         status: 500,
-        message: fallbackMessage,
+        message: dbError.message ? `${fallbackMessage} Detalhe: ${dbError.message}` : fallbackMessage,
       };
   }
 }
