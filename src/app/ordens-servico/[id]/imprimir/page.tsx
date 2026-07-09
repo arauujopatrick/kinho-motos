@@ -38,8 +38,6 @@ export default function ImprimirOS() {
 
 function Via({ order, label }: { order: ServiceOrder; label: string }) {
   const items = order.items || [];
-  const subtotal = items.reduce((s, i) => s + Number(i.price), 0);
-  const discount = Number(order.discount) || 0;
   const total = Number(order.total_value);
   const sinal = total / 2;
   const restante = total - sinal;
@@ -95,19 +93,11 @@ function Via({ order, label }: { order: ServiceOrder; label: string }) {
         </tbody>
       </table>
 
-      <div className="ml-auto w-56 text-xs space-y-0.5 mb-3">
-        <div className="flex justify-between"><span>Subtotal</span><span>R$ {subtotal.toFixed(2).replace('.', ',')}</span></div>
-        {discount > 0 && <div className="flex justify-between"><span>Desconto</span><span>- R$ {discount.toFixed(2).replace('.', ',')}</span></div>}
+      <div className="ml-auto w-56 text-xs mb-2">
         <div className="flex justify-between font-bold text-sm border-t border-black pt-0.5"><span>Total</span><span>R$ {total.toFixed(2).replace('.', ',')}</span></div>
       </div>
 
-      <div className="border-2 border-black rounded-lg px-3 py-2 mb-3 flex items-center justify-between">
-        <div>
-          <p className="font-bold text-xs">Sinal antecipado (50%)</p>
-          <p className="text-[10px] text-zinc-600">Pagamento necessário para início do serviço</p>
-        </div>
-        <p className="text-base font-bold">R$ {sinal.toFixed(2).replace('.', ',')}</p>
-      </div>
+      <p className="text-xs font-bold mb-1">Sinal antecipado (50%): R$ {sinal.toFixed(2).replace('.', ',')}</p>
 
       <div className="flex justify-between text-xs mb-4">
         <span>Restante na entrega</span>
